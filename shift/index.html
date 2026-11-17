@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-17c">
+  <link rel="stylesheet" href="style.css?v=2026-11-17e">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -45,10 +45,15 @@
     <!-- ふたり -->
     <section id="view-us" class="view">
       <div class="card us-card">
-        <div class="legend">
-          <span><i class="sw both-off"></i>2人とも休み</span>
-          <span><b class="ox-key">○</b>行ける <b class="ox-key ng">✕</b>無理</span>
-          <span><b class="heart-key">♡</b>2人とも○</span>
+        <div class="us-top">
+          <div class="legend">
+            <span><i class="sw both-off"></i>2人とも休み</span>
+            <span><b class="ox-key">○</b>行ける<b class="ox-key ng">✕</b>無理</span>
+            <span><b class="heart-key">♡</b>2人とも○</span>
+          </div>
+          <div class="mode-seg" id="usMode" aria-label="表示">
+            <button type="button" data-mode="name">シフト名</button><button type="button" data-mode="time">時間</button>
+          </div>
         </div>
         <div id="usCal"></div>
         <p class="hint">予定の部分をタップすると修正できます。</p>
@@ -128,6 +133,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-17c"></script>
+  <script type="module" src="app.js?v=2026-11-17e"></script>
 </body>
 </html>

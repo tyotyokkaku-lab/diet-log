@@ -145,44 +145,53 @@ input, select, textarea {
 .chip.empty { color: var(--muted); opacity: .5; }
 
 /* ふたり：1日1行。左に彼氏、真ん中のすき間、右に彼女 */
-.us-card { padding: 10px 8px; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .78rem; color: var(--muted); margin: 0 4px 8px; }
-.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.us-card { padding: 10px 0 4px; overflow: hidden; }
+.us-card > .hint { margin: 8px 12px 4px; }
+.us-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin: 0 10px 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .74rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 3px; }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; }
 .sw.both-off { background: var(--maybe); border: 1px solid var(--maybe-line); }
 .ox-key { color: var(--off); }
-.ox-key.ng { color: var(--danger); margin-left: 4px; }
+.ox-key.ng { color: var(--danger); margin-left: 6px; }
 .heart-key { color: var(--accent); }
+.mode-seg { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.mode-seg button { min-height: 32px; padding: 4px 12px; border: none; border-radius: 0; font-size: .8rem; background: var(--bg); color: var(--muted); }
+.mode-seg button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
 
 .us-list { display: flex; flex-direction: column; }
-.us-head, .us-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 30px minmax(0, 1fr); align-items: stretch; column-gap: 0; }
-.us-head { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 2; background: var(--card); font-size: .8rem; font-weight: 600; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
-.us-head span { display: flex; align-items: center; justify-content: center; gap: 4px; }
-.us-row { border-bottom: 1px solid var(--line); padding: 4px 0; }
-.us-row.past { opacity: .5; }
-.us-row.today .us-date b { background: var(--text); color: var(--card); border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
-.us-date { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
-.us-date b { font-size: .95rem; }
-.us-date small { font-size: .68rem; color: var(--muted); }
+.us-head, .us-row { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto 22px minmax(0, 1fr) auto; align-items: center; }
+.us-head { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 2; background: var(--card); font-size: .85rem; font-weight: 700; padding: 6px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.us-head span { display: flex; align-items: center; gap: 4px; padding-left: 6px; }
+.us-head .h-him { grid-column: 2 / 4; }
+.us-head .h-her { grid-column: 5 / 7; }
+.us-row { border-bottom: 1px solid var(--line); min-height: 46px; padding: 3px 4px 3px 0; }
+.us-row.past { opacity: .6; }
+.us-date { display: flex; align-items: baseline; gap: 2px; padding-left: 8px; align-self: stretch; border-right: 1px solid var(--line); margin-right: 4px; align-items: center; }
+.us-date b { font-size: 1.05rem; font-weight: 500; }
+.us-date small { font-size: .62rem; color: var(--muted); }
 .us-row.sun .us-date, .us-row.sun .us-date small { color: var(--sun); }
 .us-row.sat .us-date, .us-row.sat .us-date small { color: var(--sat); }
+.us-row.today { background: var(--accent-soft); }
+.us-row.today .us-date { background: var(--accent); color: #fff; margin: -3px 4px -3px 0; }
+.us-row.today .us-date small { color: #fff; }
 
-.us-side { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 8px; min-width: 0; }
-.us-side.him { border-left: 3px solid var(--him); background: var(--him-soft); }
-.us-side.her { border-left: 3px solid var(--her); background: var(--her-soft); }
-.us-shift { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; }
-.us-shift .chip { margin: 0; font-size: .82rem; max-width: 100%; }
-.us-shift .chip small { font-size: .7rem; }
-.us-shift .chip.off { font-size: .9rem; }
-.us-shift .chip.work { background: none; }
-.ox { display: flex; gap: 3px; flex: none; }
-.ox button { min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: .85rem; font-weight: 700; color: var(--muted); background: var(--card); line-height: 1; }
+.us-shift { all: unset; box-sizing: border-box; cursor: pointer; min-width: 0; padding: 0 3px; display: flex; }
+.pill { display: block; width: 100%; text-align: center; border-radius: 4px; padding: 5px 2px; font-size: .92rem; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill.work, .pill.plan { background: var(--pc); color: #fff; }
+.pill.plan { background: none; color: var(--pc); box-shadow: inset 0 0 0 2px var(--pc); }
+.pill.off { color: var(--her); background: none; }
+.pill.time { font-size: .74rem; letter-spacing: -.03em; padding: 6px 1px; }
+.pill.none { color: var(--muted); opacity: .45; font-weight: 400; }
+
+.ox { display: flex; gap: 2px; padding-right: 2px; }
+.ox button { min-height: 0; width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: .74rem; font-weight: 700; color: var(--muted); background: var(--card); line-height: 1; }
 .ox button.ok[aria-pressed="true"] { background: var(--off); border-color: var(--off); color: #fff; }
 .ox button.ng[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
 
-.us-mid { display: flex; align-items: center; justify-content: center; margin: 0 3px; border-radius: 8px; }
-.us-row.both-off .us-mid { background: var(--maybe); border: 1px solid var(--maybe-line); }
-.us-mid .heart { color: var(--accent); font-size: 1.1rem; font-weight: 700; }
+.us-mid { align-self: stretch; display: flex; align-items: center; justify-content: center; margin: -1px 2px; border-radius: 6px; }
+.us-row.both-off .us-mid { background: var(--maybe); box-shadow: inset 0 0 0 1px var(--maybe-line); }
+.us-mid .heart { color: var(--accent); font-size: 1rem; font-weight: 700; }
 
 /* ---- スクショ ---- */
 .photo-btn { display: block; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; margin-bottom: 8px; }

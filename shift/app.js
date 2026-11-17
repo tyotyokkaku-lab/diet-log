@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17c";
+const APP_VERSION = "2026-11-17e";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -135,19 +135,43 @@ function renderPerson(p) {
   });
 }
 
+// シフト名ごとに決まった色をつける（同じ名前はいつも同じ色）
+const PILL_COLORS = ["#3fae80", "#e0703f", "#a39c63", "#3f95e0", "#9d7bd8", "#5c7aa6", "#d39a2a", "#2f9e9e", "#c45f8f", "#7a8f3a"];
+// 初めて出てきたシフト名から順に色を割り当てて覚えておく（色かぶりを防ぐ）
+let colorMap = (() => { try { return JSON.parse(localStorage.getItem("shiftcal.colors") || "{}"); } catch { return {}; } })();
+function pillColor(key) {
+  if (!(key in colorMap)) {
+    const used = new Set(Object.values(colorMap));
+    let i = PILL_COLORS.findIndex((_, k) => !used.has(k));
+    if (i < 0) i = Object.keys(colorMap).length % PILL_COLORS.length;
+    colorMap[key] = i;
+    try { localStorage.setItem("shiftcal.colors", JSON.stringify(colorMap)); } catch {}
+  }
+  return PILL_COLORS[colorMap[key]];
+}
+let usMode = (() => { try { return localStorage.getItem("shiftcal.usMode") || "name"; } catch { return "name"; } })();
+function pillHtml(e) {
+  if (!e) return `<span class="pill none">–</span>`;
+  if (e.type === "off") return `<span class="pill off">${esc(e.label && e.label.length <= 3 ? e.label : "休み")}</span>`;
+  const t = e.start || e.end ? `${hm(e.start)}〜${hm(e.end)}` : "";
+  const name = e.label || (e.type === "work" ? "" : "予定");
+  const showTime = usMode === "time" ? !!t : !name && !!t;
+  const text = showTime ? t : (name || "仕事");
+  const color = pillColor(e.label || timeText(e) || e.type);
+  return `<span class="pill ${e.type} ${showTime ? "time" : ""}" style="--pc:${color}">${esc(text)}</span>`;
+}
+
 function renderUs() {
   const today = todayStr();
   const n = new Date(cur.y, cur.m, 0).getDate();
-  const side = (p, date) => {
+  const ox = (p, date) => {
     const a = getAvail(p, date);
-    return `<div class="us-side ${p}">
-      <button type="button" class="us-shift" data-date="${date}" data-who="${p}">${chipHtml(getShift(p, date))}</button>
-      <div class="ox">
+    return `<div class="ox">
         <button type="button" class="ok" data-av="ok" data-who="${p}" data-d="${date}" aria-pressed="${a === "ok"}" aria-label="${esc(nm(p))}：行ける">○</button>
         <button type="button" class="ng" data-av="ng" data-who="${p}" data-d="${date}" aria-pressed="${a === "ng"}" aria-label="${esc(nm(p))}：無理">✕</button>
-      </div>
-    </div>`;
+      </div>`;
   };
+  const shift = (p, date) => `<button type="button" class="us-shift" data-date="${date}" data-who="${p}">${pillHtml(getShift(p, date))}</button>`;
   let rows = "";
   for (let d = 1; d <= n; d++) {
     const date = ymd(cur.y, cur.m, d);
@@ -155,16 +179,24 @@ function renderUs() {
     const bothOk = getAvail("him", date) === "ok" && getAvail("her", date) === "ok";
     const cls = [bothOff(date) && "both-off", bothOk && "both-ok", date === today && "today", date < today && "past", dow === 0 && "sun", dow === 6 && "sat"].filter(Boolean).join(" ");
     rows += `<div class="us-row ${cls}">
-      <div class="us-date"><b>${d}</b><small>${WD[dow]}</small></div>
-      ${side("him", date)}
+      <div class="us-date"><b>${pad(d)}</b><small>(${WD[dow]})</small></div>
+      ${shift("him", date)}${ox("him", date)}
       <div class="us-mid">${bothOk ? `<span class="heart" aria-label="2人とも○">♡</span>` : ""}</div>
-      ${side("her", date)}
+      ${shift("her", date)}${ox("her", date)}
     </div>`;
   }
   $("usCal").innerHTML = `<div class="us-list">
-    <div class="us-head"><span></span><span><i class="dot him"></i>${esc(nm("him"))}</span><span></span><span><i class="dot her"></i>${esc(nm("her"))}</span></div>
+    <div class="us-head"><span></span><span class="h-him"><i class="dot him"></i>${esc(nm("him"))}</span><span></span><span class="h-her"><i class="dot her"></i>${esc(nm("her"))}</span></div>
     ${rows}</div>`;
+  document.querySelectorAll("#usMode button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === usMode));
 }
+$("usMode").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-mode]");
+  if (!b) return;
+  usMode = b.dataset.mode;
+  try { localStorage.setItem("shiftcal.usMode", usMode); } catch {}
+  renderUs();
+});
 
 function renderNames() {
   document.querySelectorAll(".nm-him").forEach((el) => (el.textContent = nm("him")));
