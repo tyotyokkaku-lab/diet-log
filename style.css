@@ -163,3 +163,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .avg-grid b { color: var(--text); font-size: 1rem; }
 .avg-grid .over { color: var(--over); }
 .avg-grid .under { color: var(--p); }
+
+.photo-btn { display: block; text-align: center; border: 1px dashed var(--accent); color: var(--accent); border-radius: 10px; padding: 10px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.photo-btn.busy { opacity: .6; pointer-events: none; }
+.cand-photo { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin: 8px 0; }

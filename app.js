@@ -8,7 +8,7 @@ const MEALS = [
   { id: "snack", label: "間食" },
 ];
 const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
-const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", manual: "手入力", import: "取込" };
+const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
 
@@ -167,7 +167,8 @@ function renderCandidate(extra = "") {
   if (!candidates) { box.innerHTML = extra; return; }
   const { items, source, note } = candidates;
   box.innerHTML = `<div class="cand">
-    <div><b>この内容で記録しますか？</b><span class="badge ${source === "ai" ? "ai" : ""}">${SOURCE_LABEL[source]}</span></div>
+    <div><b>この内容で記録しますか？</b><span class="badge ${source === "ai" || source === "photo" ? "ai" : ""}">${SOURCE_LABEL[source]}</span></div>
+    ${candidates.photoUrl ? `<img class="cand-photo" src="${candidates.photoUrl}" alt="送った写真">` : ""}
     <p class="note">数値は「1人前」あたりです。違っていたら直してから記録してください。</p>
     ${items.map((it, i) => `<div class="cand-item" data-i="${i}">
       <input class="name-input" data-k="name" value="${esc(it.name)}">
@@ -239,7 +240,28 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-async function estimateWithAI(text) {
+const PHOTO_PROMPT = `写真に写っている食事の栄養を推定してください。
+
+- 写っている料理・食品を見分けて、品ごとに items に入れてください。
+- 写真から見える量（器の大きさ、ご飯の盛り、枚数・個数など）をもとに、写っている量そのものを1人前として値を出します。
+- チェーン店の商品やパッケージ（コンビニ商品など）だと判断できる場合は、その公式の栄養成分を使い、name に店名・商品名を入れてください。
+- 写真だけでは量や中身が確実にわからないので、confidence は確信がない限り "medium" か "low" にしてください。
+- note には、何と判断したか・前提にした量を短く書いてください。`;
+
+// 写真を長辺1024pxのJPEGに縮小してbase64にする（通信量と料金を抑えるため）
+async function photoToJpeg(file, maxSide = 1024) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const cv = document.createElement("canvas");
+  cv.width = w; cv.height = h;
+  cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  const dataUrl = cv.toDataURL("image/jpeg", 0.85);
+  return { dataUrl, base64: dataUrl.split(",")[1] };
+}
+
+async function estimateWithAI(text, photo = null) {
   const apiKey = getKey();
   if (!apiKey) throw new Error("APIキーが未設定です。「設定」画面で入力してください。");
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
@@ -252,7 +274,15 @@ async function estimateWithAI(text) {
       fallbacks: "default",
       output_config: { effort: "low", format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `食べたもの: ${text}` }],
+      messages: [{
+        role: "user",
+        content: photo
+          ? [
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: photo.base64 } },
+              { type: "text", text: PHOTO_PROMPT + (text ? `\n\n本人からの補足: ${text}` : "") },
+            ]
+          : `食べたもの: ${text}`,
+      }],
     });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) throw new Error("APIキーが正しくないようです。設定画面で確認してください。");
@@ -270,7 +300,8 @@ async function estimateWithAI(text) {
   if (!Array.isArray(data.items) || !data.items.length) throw new Error("該当する料理が見つかりませんでした。");
   const conf = { high: "公式値ベース", medium: "一般的な推定", low: "かなり大まかな推定" }[data.confidence] || "";
   return {
-    source: "ai",
+    source: photo ? "photo" : "ai",
+    photoUrl: photo?.dataUrl,
     note: [conf, data.note].filter(Boolean).join("。"),
     items: data.items.map((it) => ({
       name: it.name, kcal: it.kcal, p: it.protein_g, f: it.fat_g, c: it.carbs_g, qty: 1,
@@ -296,10 +327,32 @@ async function calculate(text, qty, forceAI = false) {
     renderCandidate();
   } catch (e) {
     candidates = null;
-    renderCandidate(`<p class="error">${esc(e.message)}</p>
-      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">数値を手入力する</button>`);
+    showError(e);
   } finally {
     btn.disabled = false; btn.textContent = "計算する";
+  }
+}
+
+function showError(e) {
+    renderCandidate(`<p class="error">${esc(e.message)}</p>
+      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">数値を手入力する</button>`);
+}
+
+async function calculateFromPhoto(file) {
+  const text = $("foodInput").value.trim();
+  const btn = $("photoBtn");
+  btn.classList.add("busy"); btn.firstChild.textContent = "写真を解析中…";
+  candidates = null;
+  renderCandidate(`<p class="note">写真をAIで解析しています（10〜20秒ほど）…</p>`);
+  try {
+    const photo = await photoToJpeg(file);
+    candidates = await estimateWithAI(text, photo);
+    renderCandidate();
+  } catch (e) {
+    candidates = null;
+    showError(e);
+  } finally {
+    btn.classList.remove("busy"); btn.firstChild.textContent = "写真から計算";
   }
 }
 
@@ -337,7 +390,8 @@ function saveCandidates() {
       id: uid(), date: currentDate, meal: currentMeal, name: it.name, qty: it.qty || 1,
       kcal: it.kcal, p: it.p, f: it.f, c: it.c, source: candidates.source, createdAt: Date.now(),
     });
-    upsertDict(it, candidates.source, single ? text : null);
+    // 写真のときの入力欄は「補足」なので、辞書の呼び名には使わない
+    upsertDict(it, candidates.source, single && candidates.source !== "photo" ? text : null);
   }
   save();
   candidates = null;
@@ -372,7 +426,7 @@ $("editDialog").addEventListener("close", () => {
     e.meal = $("eMeal").value;
     e.qty = num($("eQty").value) || 1;
     e.kcal = num($("eKcal").value); e.p = num($("eP").value); e.f = num($("eF").value); e.c = num($("eC").value);
-    upsertDict(e, e.source === "ai" ? "manual" : e.source, null);
+    upsertDict(e, e.source === "ai" || e.source === "photo" ? "manual" : e.source, null);
   } else return;
   save();
   renderToday();
@@ -502,6 +556,12 @@ $("entryForm").addEventListener("submit", (e) => {
   const text = $("foodInput").value.trim();
   if (!text) return;
   calculate(text, num($("qtyInput").value) || 1);
+});
+
+$("photoInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (file) calculateFromPhoto(file);
 });
 
 $("candidate").addEventListener("click", (e) => {
