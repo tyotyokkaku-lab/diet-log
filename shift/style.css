@@ -184,7 +184,7 @@ input, select, textarea {
 .pill { display: block; width: 100%; text-align: center; border-radius: 4px; padding: 2px 2px; font-size: .8rem; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill.work, .pill.plan { background: var(--pc); color: #fff; }
 .pill.plan { background: none; color: var(--pc); box-shadow: inset 0 0 0 2px var(--pc); }
-.pill.off { color: var(--her); background: none; }
+.pill.off { color: var(--her); background: var(--card); box-shadow: inset 0 0 0 1.5px var(--maybe-line); }
 .pill.time { font-size: .68rem; letter-spacing: -.03em; padding: 3px 1px; }
 .pill.none { color: var(--muted); opacity: .45; font-weight: 400; }
 
