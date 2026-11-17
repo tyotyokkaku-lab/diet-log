@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17q";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17r";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17q";
+const APP_VERSION = "2026-11-17r";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -244,7 +244,7 @@ function openDay(date, who) {
 function fillDayForm() {
   const e = getShift(editing.who, editing.date);
   editing.type = e?.type || "none";
-  $("dLabel").value = e?.label || "";
+  $("dLabel").value = e?.type === "off" ? "" : (e?.label || ""); // 休みの名前（「休み」「公休」など）は仕事の名前に持ち越さない
   $("dStart").value = e?.start || "";
   $("dEnd").value = e?.end || "";
   $("dNote").value = e?.note || "";
@@ -276,6 +276,9 @@ $("dType").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-type]");
   if (!b) return;
   editing.type = b.dataset.type;
+  // 名前欄に休みを表す言葉が残っていたら消す
+  if (/^(休|休み|公休|有給|有休|希望休|OFF|オフ|×)$/i.test($("dLabel").value.trim())) $("dLabel").value = "";
+  updateColorField();
   renderTypeSeg();
 });
 $("dayDialog").addEventListener("close", () => {

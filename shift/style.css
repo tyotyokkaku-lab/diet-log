@@ -244,3 +244,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .sync-line { font-size: .78rem; color: var(--muted); margin: 0 12px 6px; }
 .sync-line.ok { color: var(--off); }
 #syncRoom { font-size: .85rem; word-break: break-all; user-select: all; -webkit-user-select: all; }
+
+/* iPhoneで時刻の入力欄が横にはみ出さないように */
+input[type="time"] { -webkit-appearance: none; appearance: none; min-width: 0; display: block; min-height: 44px; }
+dialog .row .field { min-width: 0; }
