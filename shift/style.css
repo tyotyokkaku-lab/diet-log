@@ -132,7 +132,6 @@ input, select, textarea {
 .day.today { border-color: var(--text); }
 .day:focus-visible { outline: 2px solid var(--accent); }
 .dn { font-size: .72rem; line-height: 1.2; padding-left: 2px; font-weight: 600; }
-.day.is-off { background: var(--off-soft); }
 
 .chip {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -142,9 +141,9 @@ input, select, textarea {
 }
 .chip b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .chip small { font-size: .62rem; white-space: nowrap; letter-spacing: -.02em; }
-.chip.off { color: var(--off); font-weight: 700; font-size: .8rem; }
-.chip.work { background: var(--card); }
-.chip.plan { background: var(--plan-soft); color: var(--plan); }
+.chip.off { color: var(--her); background: var(--card); box-shadow: inset 0 0 0 1.5px var(--maybe-line); font-weight: 700; font-size: .8rem; padding: 3px 1px; }
+.chip.work { background: var(--pc); color: #fff; padding: 3px 1px; }
+.chip.plan { background: var(--card); color: var(--pc); box-shadow: inset 0 0 0 1.5px var(--pc); padding: 3px 1px; }
 .chip.empty { color: var(--muted); opacity: .5; }
 
 /* ふたり：1日1行。左に彼氏、真ん中のすき間、右に彼女 */

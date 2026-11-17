@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17k";
+const APP_VERSION = "2026-11-17l";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -88,7 +88,8 @@ function chipHtml(e) {
   if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休")}</span>`;
   const main = e.label || (e.type === "work" ? (timeText(e) ? "" : "仕事") : "予定");
   const t = timeText(e);
-  return `<span class="chip ${e.type}">${main ? `<b>${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
+  // ふたりタブと同じ色（シフト名ごとの色）
+  return `<span class="chip ${e.type}" style="--pc:${pillColor(e.label || t || e.type)}">${main ? `<b>${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
 }
 function describe(e) {
   if (!e) return "未設定";
@@ -131,7 +132,7 @@ function renderPerson(p) {
   $("ocrWho").textContent = nm(p);
   $("personCal").innerHTML = calendarHtml((date) => {
     const e = getShift(p, date);
-    return { cls: e?.type === "off" ? "is-off" : "", inner: chipHtml(e) };
+    return { inner: chipHtml(e) };
   });
 }
 
