@@ -226,10 +226,6 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 #dType button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 #dType button.t-off[aria-checked="true"] { border-color: var(--off); background: var(--off-soft); color: var(--off); }
 
-.paste-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.paste-box summary { cursor: pointer; }
-.paste-box textarea { margin: 8px 0; font-size: 14px; }
-.paste-box button { width: 100%; }
 
 .tabbar {
   position: fixed; bottom: 0; left: 0; right: 0;

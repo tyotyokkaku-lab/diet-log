@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17p";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17q";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17p";
+const APP_VERSION = "2026-11-17q";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -504,121 +504,6 @@ $("ocrBtn").addEventListener("click", async () => {
   }
 });
 
-// ---------- 共有（リンクにデータを詰めて送る） ----------
-const b64url = (bytes) => { let s = ""; bytes.forEach((b) => (s += String.fromCharCode(b))); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
-const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-async function pipe(bytes, stream) {
-  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
-}
-async function encodeShare() {
-  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts, avail: state.avail, labelColors: state.labelColors }));
-  if (typeof CompressionStream === "function") return "z" + b64url(await pipe(json, new CompressionStream("deflate-raw")));
-  return "j" + b64url(json);
-}
-async function decodeShare(code) {
-  const kind = code[0], bytes = unb64url(code.slice(1));
-  const raw = kind === "z" ? await pipe(bytes, new DecompressionStream("deflate-raw")) : bytes;
-  const data = JSON.parse(new TextDecoder().decode(raw));
-  if (data.v !== 1 || !data.shifts) throw new Error("共有データの形式が違います");
-  return data;
-}
-function mergeShare(data) {
-  let n = 0;
-  for (const p of PEOPLE) {
-    for (const [date, e] of Object.entries(data.shifts[p] || {})) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !e || typeof e !== "object") continue;
-      const mine = state.shifts[p][date];
-      if (!mine || (e.u || 0) > (mine.u || 0)) {
-        state.shifts[p][date] = {
-          type: TYPES.some((t) => t.id === e.type) ? e.type : "none",
-          label: String(e.label || ""), start: String(e.start || ""), end: String(e.end || ""), note: String(e.note || ""), u: e.u || Date.now(),
-        };
-        n++;
-      }
-    }
-    for (const [date, a] of Object.entries(data.avail?.[p] || {})) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !a || typeof a !== "object") continue;
-      const mine = state.avail[p][date];
-      if (!mine || (a.u || 0) > (mine.u || 0)) {
-        state.avail[p][date] = { v: ["ok", "ng"].includes(a.v) ? a.v : "", u: a.u || Date.now() };
-        n++;
-      }
-    }
-    // 名前は、こちらがまだ初期値のときだけ相手の設定を使う
-    const def = defaultState().names[p];
-    if (state.names[p] === def && data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
-  }
-  // 色は、こちらでまだ決めていないシフト名だけ相手の色を使う
-  for (const [label, c] of Object.entries(data.labelColors || {})) {
-    if (isHex(c) && !isHex(state.labelColors[label])) state.labelColors[label] = c.toLowerCase();
-  }
-  save();
-  return n;
-}
-// ホーム画面に追加したアプリと Safari は保存場所が別。リンクを Safari で開いたときは、アプリで取り込むよう案内する
-const isStandalone = () => navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
-const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-async function askImport(code, fromLink = false) {
-  let data;
-  try { data = await decodeShare(code); }
-  catch (e) { alert("共有リンクを読み取れませんでした：" + e.message); return; }
-  const count = (p) => Object.values(data.shifts[p] || {}).filter((e) => e?.type && e.type !== "none").length;
-  $("importSummary").textContent =
-    `${data.names?.him || "彼氏"}：${count("him")}日分、${data.names?.her || "彼女"}：${count("her")}日分。同じ日に両方入っている場合は、あとから入れた方を使います。`;
-  const inBrowser = fromLink && isIOS && !isStandalone();
-  $("importBrowserNote").hidden = !inBrowser;
-  $("importCopy").hidden = !inBrowser;
-  $("importCopy").onclick = async () => {
-    const url = `${location.origin}${location.pathname}#share=${code}`;
-    try { await navigator.clipboard.writeText(url); $("importCopy").textContent = "コピーしました"; }
-    catch { prompt("このリンクをコピーしてください", url); }
-  };
-  $("importCopy").textContent = "リンクをコピー";
-  $("importDialog").returnValue = "";
-  $("importDialog").showModal();
-  $("importDialog").addEventListener("close", () => {
-    if ($("importDialog").returnValue !== "ok") return;
-    const n = mergeShare(data);
-    view = "us";
-    render();
-    alert(`${n}日分を更新しました`);
-  }, { once: true });
-}
-$("shareBtn").addEventListener("click", async () => {
-  const url = `${location.origin}${location.pathname}#share=${await encodeShare()}`;
-  const text = "ふたりのシフトを更新したよ。リンクを長押しでコピーして、アプリの「ふたり」→「受け取ったリンクを取り込む」で入れてね";
-  try {
-    if (navigator.share) { await navigator.share({ title: "ふたりのシフト", text, url }); return; }
-  } catch (e) { if (e.name === "AbortError") return; }
-  try { await navigator.clipboard.writeText(url); alert("共有リンクをコピーしました。LINEなどに貼り付けて送ってください。"); }
-  catch { prompt("このリンクをコピーして送ってください", url); }
-});
-$("receiveBtn").addEventListener("click", async () => {
-  let text = "";
-  try { text = await navigator.clipboard.readText(); } catch {}
-  let m = text.match(/share=([zj][A-Za-z0-9_-]+)/);
-  if (!m) {
-    text = prompt("受け取った共有リンクを貼り付けてください") || "";
-    m = text.match(/share=([zj][A-Za-z0-9_-]+)/);
-    if (!m) { if (text) alert("共有リンクが見つかりませんでした"); return; }
-  }
-  askImport(m[1]);
-});
-$("pasteShareBtn").addEventListener("click", () => {
-  const m = $("pasteShare").value.match(/share=([zj][A-Za-z0-9_-]+)/);
-  if (!m) { alert("共有リンクが見つかりませんでした"); return; }
-  $("pasteShare").value = "";
-  askImport(m[1]);
-});
-function checkHash() {
-  const m = location.hash.match(/share=([zj][A-Za-z0-9_-]+)/);
-  if (!m) return;
-  history.replaceState(null, "", location.pathname + location.search);
-  askImport(m[1], true);
-}
-window.addEventListener("hashchange", checkHash);
-
 // ---------- 画面切り替え・設定 ----------
 document.querySelector(".tabbar").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-view]");
@@ -719,7 +604,6 @@ function renderSync() {
   $("syncNotReady").hidden = syncConfigured;
   $("syncOff").hidden = !syncConfigured || !!room;
   $("syncOn").hidden = !on;
-  $("manualShare").hidden = on;
   $("usSyncLine").hidden = !on;
   if (on) {
     $("syncRoom").textContent = room;
@@ -767,7 +651,6 @@ addEventListener("orientationchange", () => setTimeout(measureTopbar, 300));
 
 renderKeyStatus();
 render();
-checkHash();
 renderSync();
 connectSync();
 

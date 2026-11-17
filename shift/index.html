@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-17p">
+  <link rel="stylesheet" href="style.css?v=2026-11-17q">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -62,14 +62,6 @@
         <p class="hint">予定の部分をタップすると修正できます。</p>
         <p class="sync-line" id="usSyncLine" hidden></p>
       </div>
-      <div class="card" id="manualShare">
-        <h2>相手と共有する</h2>
-        <p class="hint">データはこのスマホの中にだけ保存されます。共有リンクを作ってLINEなどで送り、相手は届いたリンクをコピーして「受け取ったリンクを取り込む」を押すと、ふたり分のシフトが取り込まれます（新しく入れた方が優先）。</p>
-        <div class="stack">
-          <button type="button" class="primary" id="shareBtn">共有リンクを作って送る</button>
-          <button type="button" id="receiveBtn">受け取ったリンクを取り込む</button>
-        </div>
-      </div>
     </section>
 
     <!-- 設定 -->
@@ -113,11 +105,6 @@
       </div>
       <div class="card stack">
         <h2>データ</h2>
-        <details class="paste-box">
-          <summary>共有リンク（文字）を貼り付けて取り込む</summary>
-          <textarea id="pasteShare" rows="4" placeholder="https://…#share=…"></textarea>
-          <button type="button" class="primary" id="pasteShareBtn">取り込む</button>
-        </details>
         <button type="button" class="danger" id="clearAll">すべてのシフトを消す</button>
         <p class="hint">アプリのバージョン：<span id="appVersion"></span></p>
         <button type="button" id="forceUpdate">最新版を読み込み直す</button>
@@ -153,19 +140,7 @@
     </form>
   </dialog>
 
-  <dialog id="importDialog">
-    <form method="dialog">
-      <h3>共有されたシフトを取り込みますか？</h3>
-      <p id="importSummary"></p>
-      <p class="hint" id="importBrowserNote" hidden>ホーム画面に追加したアプリで使っている場合は、ここ（Safari）ではなくアプリの方に取り込む必要があります。「リンクをコピー」を押してからアプリを開き、「ふたり」タブの「受け取ったリンクを取り込む」を押してください。</p>
-      <button type="button" class="wide" id="importCopy" hidden style="margin-bottom:10px">リンクをコピー</button>
-      <div class="row">
-        <button value="cancel">やめる</button>
-        <button value="ok" class="primary">取り込む</button>
-      </div>
-    </form>
-  </dialog>
 
-  <script type="module" src="app.js?v=2026-11-17p"></script>
+  <script type="module" src="app.js?v=2026-11-17q"></script>
 </body>
 </html>
