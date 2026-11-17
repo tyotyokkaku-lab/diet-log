@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17h";
+const APP_VERSION = "2026-11-17i";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -185,9 +185,8 @@ function renderUs() {
       ${shift("her", date)}${ox("her", date)}
     </div>`;
   }
-  $("usCal").innerHTML = `<div class="us-list">
-    <div class="us-head"><span></span><span class="h-him"><i class="dot him"></i>${esc(nm("him"))}</span><span></span><span class="h-her"><i class="dot her"></i>${esc(nm("her"))}</span></div>
-    ${rows}</div>`;
+  $("usHead").innerHTML = `<div class="us-head"><span></span><span class="h-him"><i class="dot him"></i>${esc(nm("him"))}</span><span></span><span class="h-her"><i class="dot her"></i>${esc(nm("her"))}</span></div>`;
+  $("usCal").innerHTML = `<div class="us-list">${rows}</div>`;
   document.querySelectorAll("#usMode button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === usMode));
 }
 $("usMode").addEventListener("click", (ev) => {
