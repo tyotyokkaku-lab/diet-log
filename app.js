@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-17e";
+const APP_VERSION = "2026-11-17f";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -861,4 +861,20 @@ window.addEventListener("error", (e) => alert("エラー：" + (e.message || e.e
 window.addEventListener("unhandledrejection", (e) => alert("エラー：" + (e.reason?.message || e.reason)));
 
 $("appVersion").textContent = APP_VERSION;
+// スマホに残った古いファイルを捨てて、最新版を取り直す（記録やAPIキーは消えない）
+$("forceUpdate").addEventListener("click", async () => {
+  const b = $("forceUpdate");
+  b.disabled = true; b.textContent = "読み込み中…";
+  try {
+    const html = await (await fetch("./?t=" + Date.now(), { cache: "reload" })).text();
+    const v = (html.match(/app\.js\?v=([\w-]+)/) || [])[1];
+    for (const u of ["./", "index.html", "style.css", "app.js", v && `style.css?v=${v}`, v && `app.js?v=${v}`].filter(Boolean)) {
+      await fetch(u, { cache: "reload" }).catch(() => {});
+    }
+    location.replace("./?t=" + Date.now());
+  } catch {
+    alert("読み込めませんでした。電波の状態を確認してください。");
+    b.disabled = false; b.textContent = "最新版を読み込み直す";
+  }
+});
 renderToday();
