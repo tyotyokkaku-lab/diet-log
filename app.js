@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-17c";
+const APP_VERSION = "2026-11-17d";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -683,6 +683,9 @@ $("exportCsv").addEventListener("click", exportCsv);
 function parseCsv(text) {
   const rows = []; let row = [], cur = "", q = false;
   text = text.replace(/^\ufeff/, "");
+  // エクセルからコピーして貼った場合はタブ区切りになる
+  const firstLine = text.split(/\r?\n/)[0];
+  const sep = firstLine.includes("\t") && !firstLine.includes(",") ? "\t" : ",";
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (q) {
@@ -690,7 +693,7 @@ function parseCsv(text) {
       else if (ch === '"') q = false;
       else cur += ch;
     } else if (ch === '"') q = true;
-    else if (ch === ",") { row.push(cur); cur = ""; }
+    else if (ch === sep) { row.push(cur); cur = ""; }
     else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && text[i + 1] === "\n") i++;
       row.push(cur); rows.push(row); row = []; cur = "";
@@ -737,6 +740,19 @@ $("importCsv").addEventListener("change", async (e) => {
     alert("読み込めませんでした：" + err.message);
   } finally {
     e.target.value = "";
+  }
+});
+$("pasteCsvBtn").addEventListener("click", () => {
+  const text = $("pasteCsv").value.trim();
+  if (!text) { alert("CSVの文字を貼り付けてください。"); return; }
+  try {
+    const n = importDailyCsv(text);
+    if (!n) throw new Error("取り込める行がありませんでした（1行目に「日付」「摂取カロリー(kcal)」などの見出しが必要です）");
+    save();
+    $("pasteCsv").value = "";
+    alert(`${n}日分を取り込みました。「履歴」で見られます。`);
+  } catch (err) {
+    alert("読み込めませんでした：" + err.message);
   }
 });
 $("exportJson").addEventListener("click", () =>

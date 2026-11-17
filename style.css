@@ -170,3 +170,8 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; }
 .thumb { position: relative; }
 .thumb button { position: absolute; top: 4px; right: 4px; min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; line-height: 1; }
+
+.paste-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.paste-box summary { cursor: pointer; min-height: 24px; }
+.paste-box textarea { width: 100%; margin: 8px 0; font: inherit; font-size: 14px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.paste-box button { width: 100%; }
