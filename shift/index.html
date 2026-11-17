@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ふたりのシフト</title>
+  <meta name="theme-color" content="#d9577f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
+  <link rel="stylesheet" href="style.css?v=2026-11-17a">
+</head>
+<body data-view="us">
+  <header class="topbar">
+    <button class="icon-btn" id="prevMonth" aria-label="前の月">‹</button>
+    <button class="date-btn" id="monthLabel"></button>
+    <button class="icon-btn" id="nextMonth" aria-label="次の月">›</button>
+  </header>
+
+  <main>
+    <!-- 彼氏 / 彼女 のカレンダー（同じ画面を使い回す） -->
+    <section id="view-person" class="view" hidden>
+      <div class="card">
+        <h2 id="personTitle"></h2>
+        <div id="personCal"></div>
+        <p class="hint">日にちをタップすると手で入力・修正できます。</p>
+      </div>
+
+      <div class="card">
+        <h2>スクショから読み取る</h2>
+        <p class="hint">シフト表や他のカレンダーアプリのスクリーンショットを選ぶと、AIが読み取って<b id="ocrWho"></b>のカレンダーに入れます。</p>
+        <label class="photo-btn" id="shotBtn">スクショを選ぶ（複数OK）<input type="file" id="shotInput" accept="image/*" multiple hidden></label>
+        <div class="thumbs" id="thumbs"></div>
+        <label class="field">
+          <span>補足（任意）</span>
+          <input id="ocrHint" placeholder="例：「早」は9:00-17:00、黄色の日が私のシフト">
+        </label>
+        <button type="button" class="primary wide" id="ocrBtn" disabled>読み取る</button>
+        <div id="ocrResult"></div>
+      </div>
+    </section>
+
+    <!-- ふたり -->
+    <section id="view-us" class="view">
+      <div class="card">
+        <div class="legend">
+          <span><i class="dot him"></i><b class="nm-him"></b></span>
+          <span><i class="dot her"></i><b class="nm-her"></b></span>
+          <span><i class="sw maybe"></i>会えるかも？（ふたりとも休み）</span>
+        </div>
+        <div id="usCal"></div>
+      </div>
+      <div class="card">
+        <h2>会えるかも？な日</h2>
+        <div id="maybeList"></div>
+      </div>
+      <div class="card">
+        <h2>相手と共有する</h2>
+        <p class="hint">データはこのスマホの中にだけ保存されます。共有リンクを作ってLINEなどで送ると、相手のアプリにふたり分のシフトが取り込まれます（新しく入れた方が優先）。</p>
+        <button type="button" class="primary wide" id="shareBtn">共有リンクを作って送る</button>
+      </div>
+    </section>
+
+    <!-- 設定 -->
+    <section id="view-settings" class="view" hidden>
+      <div class="card">
+        <h2>名前</h2>
+        <div class="row">
+          <label class="field"><span>彼氏</span><input id="nameHim"></label>
+          <label class="field"><span>彼女</span><input id="nameHer"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Claude APIキー</h2>
+        <p class="hint">スクショの読み取りに使います。このスマホの中にだけ保存されます。食事ログに設定済みのキーがあればそれを使います。</p>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+        <button type="button" class="primary wide" id="saveKey" style="margin-top:8px">保存</button>
+        <p class="hint" id="keyStatus"></p>
+      </div>
+      <div class="card stack">
+        <h2>データ</h2>
+        <details class="paste-box">
+          <summary>共有リンク（文字）を貼り付けて取り込む</summary>
+          <textarea id="pasteShare" rows="4" placeholder="https://…#share=…"></textarea>
+          <button type="button" class="primary" id="pasteShareBtn">取り込む</button>
+        </details>
+        <button type="button" class="danger" id="clearAll">すべてのシフトを消す</button>
+        <p class="hint">アプリのバージョン：<span id="appVersion"></span></p>
+        <button type="button" id="forceUpdate">最新版を読み込み直す</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-view="him"><i class="dot him"></i><span class="nm-him"></span></button>
+    <button data-view="her"><i class="dot her"></i><span class="nm-her"></span></button>
+    <button data-view="us" class="active">ふたり</button>
+    <button data-view="settings">設定</button>
+  </nav>
+
+  <dialog id="dayDialog">
+    <form method="dialog" id="dayForm">
+      <h3 id="dTitle"></h3>
+      <div class="seg" id="dWho"></div>
+      <div class="seg" id="dType" role="radiogroup" aria-label="種類"></div>
+      <div id="dWorkFields">
+        <label class="field"><span>名前（任意）</span><input id="dLabel" placeholder="例：早番 / 遅番 / 飲み会"></label>
+        <div class="row">
+          <label class="field"><span>開始</span><input id="dStart" type="time"></label>
+          <label class="field"><span>終了</span><input id="dEnd" type="time"></label>
+        </div>
+      </div>
+      <label class="field"><span>メモ（任意）</span><input id="dNote"></label>
+      <div class="row">
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="importDialog">
+    <form method="dialog">
+      <h3>共有されたシフトを取り込みますか？</h3>
+      <p id="importSummary"></p>
+      <div class="row">
+        <button value="cancel">やめる</button>
+        <button value="ok" class="primary">取り込む</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js?v=2026-11-17a"></script>
+</body>
+</html>

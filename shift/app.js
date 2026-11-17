@@ -1,0 +1,531 @@
+import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
+
+// ---------- 定数 ----------
+const MODEL = "claude-opus-5-5";
+const STORE_KEY = "shiftcal.v1";
+const KEY_KEY = "shiftcal.apiKey";
+const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
+const APP_VERSION = "2026-11-17a";
+const PEOPLE = ["him", "her"];
+const TYPES = [
+  { id: "off", label: "休み" },
+  { id: "work", label: "仕事" },
+  { id: "plan", label: "予定" },
+  { id: "none", label: "未設定" },
+];
+const WD = ["日", "月", "火", "水", "木", "金", "土"];
+
+// ---------- 保存データ ----------
+// shifts[person][YYYY-MM-DD] = { type: off|work|plan|none, label, start, end, note, u(更新時刻) }
+// type "none" は「消した」記録（共有したときに相手側でも消えるように残しておく）
+const defaultState = () => ({
+  names: { him: "彼氏", her: "彼女" },
+  shifts: { him: {}, her: {} },
+});
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return defaultState();
+    const s = JSON.parse(raw);
+    const d = defaultState();
+    return { names: { ...d.names, ...s.names }, shifts: { him: s.shifts?.him || {}, her: s.shifts?.her || {} } };
+  } catch {
+    return defaultState();
+  }
+}
+let state = load();
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch (e) { alert("保存できませんでした：" + e.message); }
+}
+function getKey() {
+  try { return localStorage.getItem(KEY_KEY) || localStorage.getItem(DIET_KEY_KEY) || ""; } catch { return ""; }
+}
+function setKey(v) {
+  try { v ? localStorage.setItem(KEY_KEY, v) : localStorage.removeItem(KEY_KEY); } catch {}
+}
+
+// ---------- ユーティリティ ----------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (n) => String(n).padStart(2, "0");
+const ymd = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+const todayStr = () => { const t = new Date(); return ymd(t.getFullYear(), t.getMonth() + 1, t.getDate()); };
+function parseDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+function dateLabel(s) { const dt = parseDate(s); return `${dt.getMonth() + 1}/${dt.getDate()}(${WD[dt.getDay()]})`; }
+const nm = (p) => state.names[p] || (p === "him" ? "彼氏" : "彼女");
+
+function getShift(p, date) {
+  const e = state.shifts[p][date];
+  return e && e.type !== "none" ? e : null;
+}
+function setShift(p, date, e) {
+  state.shifts[p][date] = { type: e.type, label: e.label || "", start: e.start || "", end: e.end || "", note: e.note || "", u: Date.now() };
+}
+
+// "09:00" → "9"、"09:30" → "9:30"
+function hm(t) {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  return m === "00" ? String(+h) : `${+h}:${m}`;
+}
+function timeText(e) {
+  if (!e.start && !e.end) return "";
+  return `${hm(e.start)}-${hm(e.end)}`;
+}
+function chipHtml(e) {
+  if (!e) return `<span class="chip empty">–</span>`;
+  if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休")}</span>`;
+  const main = e.label || (e.type === "work" ? (timeText(e) ? "" : "仕事") : "予定");
+  const t = timeText(e);
+  return `<span class="chip ${e.type}">${main ? `<b>${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
+}
+function describe(e) {
+  if (!e) return "未設定";
+  const t = timeText(e);
+  const base = e.type === "off" ? (e.label || "休み") : (e.label || (e.type === "work" ? "仕事" : "予定"));
+  return [base, t].filter(Boolean).join(" ") + (e.note ? `（${e.note}）` : "");
+}
+
+// ---------- 表示中の月・画面 ----------
+let cur = (() => { const t = new Date(); return { y: t.getFullYear(), m: t.getMonth() + 1 }; })();
+let view = "us";
+
+function monthDays(y, m) {
+  const first = new Date(y, m - 1, 1).getDay();
+  const n = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first; i++) cells.push(null);
+  for (let d = 1; d <= n; d++) cells.push(ymd(y, m, d));
+  while (cells.length % 7) cells.push(null);
+  return cells;
+}
+
+function calendarHtml(cellFn) {
+  const today = todayStr();
+  const head = WD.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
+  const body = monthDays(cur.y, cur.m).map((date) => {
+    if (!date) return `<div class="day blank"></div>`;
+    const dow = parseDate(date).getDay();
+    const { cls = "", inner = "" } = cellFn(date);
+    return `<button type="button" class="day ${cls} ${date === today ? "today" : ""}" data-date="${date}">
+      <span class="dn ${dow === 0 ? "sun" : dow === 6 ? "sat" : ""}">${+date.slice(8)}</span>${inner}</button>`;
+  }).join("");
+  return `<div class="cal">${head}${body}</div>`;
+}
+
+const bothOff = (date) => getShift("him", date)?.type === "off" && getShift("her", date)?.type === "off";
+
+function renderPerson(p) {
+  $("personTitle").innerHTML = `<i class="dot ${p}"></i>${esc(nm(p))}のシフト`;
+  $("ocrWho").textContent = nm(p);
+  $("personCal").innerHTML = calendarHtml((date) => {
+    const e = getShift(p, date);
+    return { cls: e?.type === "off" ? "is-off" : "", inner: chipHtml(e) };
+  });
+}
+
+function renderUs() {
+  $("usCal").innerHTML = calendarHtml((date) => ({
+    cls: "us" + (bothOff(date) ? " maybe" : ""),
+    inner: `<div class="half him">${chipHtml(getShift("him", date))}</div>
+            <div class="gap"></div>
+            <div class="half her">${chipHtml(getShift("her", date))}</div>
+            ${bothOff(date) ? `<span class="heart" aria-label="会えるかも？">♡</span>` : ""}`,
+  }));
+  const days = monthDays(cur.y, cur.m).filter((d) => d && bothOff(d));
+  const today = todayStr();
+  $("maybeList").innerHTML = days.length
+    ? days.map((d) => `<button type="button" class="maybe-row ${d < today ? "past" : ""}" data-date="${d}">
+        <b>${dateLabel(d)}</b><span>ふたりとも休み → 会えるかも？</span></button>`).join("")
+    : `<p class="empty">${cur.m}月はまだ「ふたりとも休み」の日がありません</p>`;
+}
+
+function renderNames() {
+  document.querySelectorAll(".nm-him").forEach((el) => (el.textContent = nm("him")));
+  document.querySelectorAll(".nm-her").forEach((el) => (el.textContent = nm("her")));
+}
+
+function render() {
+  $("monthLabel").textContent = `${cur.y}年${cur.m}月`;
+  renderNames();
+  document.body.dataset.view = view;
+  $("view-person").hidden = !PEOPLE.includes(view);
+  $("view-us").hidden = view !== "us";
+  $("view-settings").hidden = view !== "settings";
+  document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  if (PEOPLE.includes(view)) renderPerson(view);
+  if (view === "us") renderUs();
+}
+
+// ---------- 日にちの編集 ----------
+let editing = null; // { date, who }
+function openDay(date, who) {
+  editing = { date, who, fixed: PEOPLE.includes(view) };
+  $("dTitle").textContent = dateLabel(date);
+  $("dWho").hidden = editing.fixed;
+  $("dWho").innerHTML = PEOPLE.map((p) =>
+    `<button type="button" data-who="${p}"><i class="dot ${p}"></i>${esc(nm(p))}<small>${esc(describe(getShift(p, date)))}</small></button>`).join("");
+  fillDayForm();
+  $("dayDialog").showModal();
+}
+function fillDayForm() {
+  const e = getShift(editing.who, editing.date);
+  editing.type = e?.type || "none";
+  $("dLabel").value = e?.label || "";
+  $("dStart").value = e?.start || "";
+  $("dEnd").value = e?.end || "";
+  $("dNote").value = e?.note || "";
+  document.querySelectorAll("#dWho button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.who === editing.who));
+  renderTypeSeg();
+}
+function renderTypeSeg() {
+  $("dType").innerHTML = TYPES.map((t) =>
+    `<button type="button" role="radio" data-type="${t.id}" aria-checked="${t.id === editing.type}" class="t-${t.id}">${t.label}</button>`).join("");
+  $("dWorkFields").hidden = editing.type === "off" || editing.type === "none";
+}
+$("dWho").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-who]");
+  if (!b) return;
+  editing.who = b.dataset.who;
+  fillDayForm();
+});
+$("dType").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-type]");
+  if (!b) return;
+  editing.type = b.dataset.type;
+  renderTypeSeg();
+});
+$("dayDialog").addEventListener("close", () => {
+  if ($("dayDialog").returnValue !== "save" || !editing) return;
+  const isOff = editing.type === "off";
+  setShift(editing.who, editing.date, {
+    type: editing.type,
+    label: isOff ? "" : $("dLabel").value.trim(),
+    start: isOff ? "" : $("dStart").value,
+    end: isOff ? "" : $("dEnd").value,
+    note: editing.type === "none" ? "" : $("dNote").value.trim(),
+  });
+  save();
+  render();
+});
+document.querySelector("main").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-date]");
+  if (!b) return;
+  openDay(b.dataset.date, PEOPLE.includes(view) ? view : "him");
+});
+
+// ---------- スクショ読み取り ----------
+let shots = []; // {dataUrl, base64}
+let ocr = null; // { who, entries: [{date,type,label,start,end,on}], note }
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めませんでした")); };
+    img.src = url;
+  });
+}
+// 文字が読めるよう長辺1600pxまでのJPEGにする
+async function toJpeg(file, maxSide = 1600) {
+  const img = await loadImage(file);
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  if (!iw || !ih) throw new Error("画像のサイズを読み取れませんでした");
+  const scale = Math.min(1, maxSide / Math.max(iw, ih));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(iw * scale); cv.height = Math.round(ih * scale);
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  const dataUrl = cv.toDataURL("image/jpeg", 0.9);
+  if (!dataUrl.startsWith("data:image/jpeg")) throw new Error("画像の変換に失敗しました");
+  return { dataUrl, base64: dataUrl.split(",")[1] };
+}
+function renderThumbs() {
+  $("thumbs").innerHTML = shots.map((s, i) =>
+    `<div class="thumb"><img src="${s.dataUrl}" alt="スクショ${i + 1}"><button type="button" data-rm="${i}" aria-label="外す">×</button></div>`).join("");
+  $("ocrBtn").disabled = !shots.length;
+}
+$("shotInput").addEventListener("change", async (ev) => {
+  const files = [...ev.target.files].slice(0, 6 - shots.length);
+  ev.target.value = "";
+  $("shotBtn").classList.add("busy");
+  try {
+    for (const f of files) shots.push(await toJpeg(f));
+  } catch (e) { alert(e.message); }
+  $("shotBtn").classList.remove("busy");
+  renderThumbs();
+});
+$("thumbs").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-rm]");
+  if (!b) return;
+  shots.splice(+b.dataset.rm, 1);
+  renderThumbs();
+});
+
+const OCR_SCHEMA = {
+  type: "object",
+  properties: {
+    entries: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "YYYY-MM-DD" },
+          type: { type: "string", enum: ["work", "off", "plan"] },
+          label: { type: "string", description: "画像に書かれていたシフト名・予定名（例：早番、A、飲み会）。なければ空文字" },
+          start: { type: "string", description: "開始時刻 HH:MM（24時間）。わからなければ空文字" },
+          end: { type: "string", description: "終了時刻 HH:MM（24時間）。わからなければ空文字" },
+        },
+        required: ["date", "type", "label", "start", "end"],
+        additionalProperties: false,
+      },
+    },
+    note: { type: "string", description: "読み取りで迷った点・前提にしたことを短く。なければ空文字" },
+  },
+  required: ["entries", "note"],
+  additionalProperties: false,
+};
+
+function ocrPrompt(who, hint) {
+  return `これは「${nm(who)}」の勤務シフトや予定が写ったスクリーンショットです（シフト表、カレンダーアプリ、勤務管理アプリ、LINEのメッセージなど）。
+読み取れる日ごとの予定を entries に入れてください。
+
+- 今日は ${todayStr()}、アプリで今表示している月は ${cur.y}年${cur.m}月 です。画像に年や月が書かれていなければ、表示中の月かその近くとして解釈してください。
+- type：仕事・出勤・シフト勤務は "work"。休み・公休・有給・希望休・「休」「×」「OFF」「/」などは "off"。仕事以外の予定（遊び・用事など）は "plan"。
+- シフト表で複数人が並んでいる場合は「${nm(who)}」本人の行・列だけを読んでください。どれが本人か判断できない場合は、note にそう書いてください。
+- シフト表で、空欄が明らかに「休み」を意味している場合は "off" にしてください。カレンダーで単に何も書かれていない日は出力しないでください。
+- 時刻は24時間表記の HH:MM（例 "09:00"、"22:30"）。「9-18」なら start "09:00" end "18:00"。日をまたぐ場合も end はそのまま（例 "02:00"）。
+- 同じ日に複数の予定がある場合は1件にまとめ、仕事があれば type は "work" にしてください。
+- 推測しすぎず、読み取れたものだけを入れてください。${hint ? `\n\n本人からの補足：${hint}` : ""}`;
+}
+
+async function readShots(who, hint) {
+  const apiKey = getKey();
+  if (!apiKey) throw new Error("APIキーが未設定です。「設定」画面で入力してください。");
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  let res;
+  try {
+    res = await client.beta.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "low", format: { type: "json_schema", schema: OCR_SCHEMA } },
+      messages: [{
+        role: "user",
+        content: [
+          ...shots.flatMap((s, i) => [
+            { type: "text", text: `画像${i + 1}` },
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: s.base64 } },
+          ]),
+          { type: "text", text: ocrPrompt(who, hint) },
+        ],
+      }],
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new Error("APIキーが正しくないようです。設定画面で確認してください。");
+    if (e instanceof Anthropic.RateLimitError) throw new Error("混み合っています。少し待ってからもう一度試してください。");
+    if (e instanceof Anthropic.APIConnectionError) throw new Error("通信できませんでした。電波の状態を確認してください。");
+    if (e instanceof Anthropic.APIError && e.status === 400 && /credit|balance/i.test(e.message)) throw new Error("APIのクレジット残高が足りないようです。");
+    if (e instanceof Anthropic.APIError) throw new Error(`AIの呼び出しに失敗しました（${e.status ?? ""}）：${e.message}`);
+    throw e;
+  }
+  if (res.stop_reason === "refusal") throw new Error("AIが読み取れませんでした。別の画像で試してください。");
+  if (res.stop_reason === "max_tokens") throw new Error("AIの回答が途中で切れました。画像を減らしてもう一度試してください。");
+  const tb = res.content.find((b) => b.type === "text");
+  if (!tb) throw new Error("AIの回答を読み取れませんでした。");
+  const data = JSON.parse(tb.text);
+  const okTime = (t) => (/^\d{1,2}:\d{2}$/.test(t) ? t.padStart(5, "0") : "");
+  const entries = (data.entries || [])
+    .filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date) && !isNaN(parseDate(e.date)))
+    .map((e) => ({ date: e.date, type: e.type, label: e.label || "", start: okTime(e.start), end: okTime(e.end), on: true }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  // 同じ日が重複したら後のものを使う
+  const byDate = new Map(entries.map((e) => [e.date, e]));
+  return { who, entries: [...byDate.values()], note: data.note || "" };
+}
+
+function renderOcr(msg) {
+  if (msg) { $("ocrResult").innerHTML = msg; return; }
+  if (!ocr) { $("ocrResult").innerHTML = ""; return; }
+  if (!ocr.entries.length) {
+    $("ocrResult").innerHTML = `<p class="error">予定を読み取れませんでした。${esc(ocr.note)}</p>`;
+    return;
+  }
+  const n = ocr.entries.filter((e) => e.on).length;
+  $("ocrResult").innerHTML = `
+    <div class="ocr">
+      <p class="note">${esc(nm(ocr.who))}の予定として ${ocr.entries.length}件 読み取りました。入れない日はチェックを外してください。${ocr.note ? `<br>AIのメモ：${esc(ocr.note)}` : ""}</p>
+      ${ocr.entries.map((e, i) => {
+        const old = getShift(ocr.who, e.date);
+        return `<label class="ocr-row">
+          <input type="checkbox" data-i="${i}" ${e.on ? "checked" : ""}>
+          <b>${dateLabel(e.date)}</b>
+          <span class="t-${e.type}">${esc(describe(e))}</span>
+          ${old ? `<small>上書き（今：${esc(describe(old))}）</small>` : ""}
+        </label>`;
+      }).join("")}
+      <button type="button" class="primary wide" id="applyOcr" ${n ? "" : "disabled"}>${n}件をカレンダーに入れる</button>
+    </div>`;
+}
+$("ocrResult").addEventListener("change", (ev) => {
+  const cb = ev.target.closest("input[data-i]");
+  if (!cb) return;
+  ocr.entries[+cb.dataset.i].on = cb.checked;
+  renderOcr();
+});
+$("ocrResult").addEventListener("click", (ev) => {
+  if (ev.target.id !== "applyOcr") return;
+  const picked = ocr.entries.filter((e) => e.on);
+  for (const e of picked) setShift(ocr.who, e.date, { ...e, note: "" });
+  save();
+  // 入れた予定の月を表示する
+  if (picked.length) { const [y, m] = picked[0].date.split("-").map(Number); cur = { y, m }; }
+  ocr = null; shots = [];
+  renderThumbs(); renderOcr();
+  $("ocrHint").value = "";
+  render();
+  $("personCal").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("ocrBtn").addEventListener("click", async () => {
+  const who = view;
+  const btn = $("ocrBtn");
+  btn.disabled = true; btn.textContent = "読み取り中…";
+  renderOcr(`<p class="note">AIが画像を読んでいます（十数秒〜1分ほど）…</p>`);
+  try {
+    ocr = await readShots(who, $("ocrHint").value.trim());
+    renderOcr();
+  } catch (e) {
+    ocr = null;
+    renderOcr(`<p class="error">${esc(e.message)}</p>`);
+  } finally {
+    btn.textContent = "読み取る";
+    btn.disabled = !shots.length;
+  }
+});
+
+// ---------- 共有（リンクにデータを詰めて送る） ----------
+const b64url = (bytes) => { let s = ""; bytes.forEach((b) => (s += String.fromCharCode(b))); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+async function pipe(bytes, stream) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+}
+async function encodeShare() {
+  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts }));
+  if (typeof CompressionStream === "function") return "z" + b64url(await pipe(json, new CompressionStream("deflate-raw")));
+  return "j" + b64url(json);
+}
+async function decodeShare(code) {
+  const kind = code[0], bytes = unb64url(code.slice(1));
+  const raw = kind === "z" ? await pipe(bytes, new DecompressionStream("deflate-raw")) : bytes;
+  const data = JSON.parse(new TextDecoder().decode(raw));
+  if (data.v !== 1 || !data.shifts) throw new Error("共有データの形式が違います");
+  return data;
+}
+function mergeShare(data) {
+  let n = 0;
+  for (const p of PEOPLE) {
+    for (const [date, e] of Object.entries(data.shifts[p] || {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !e || typeof e !== "object") continue;
+      const mine = state.shifts[p][date];
+      if (!mine || (e.u || 0) > (mine.u || 0)) {
+        state.shifts[p][date] = {
+          type: TYPES.some((t) => t.id === e.type) ? e.type : "none",
+          label: String(e.label || ""), start: String(e.start || ""), end: String(e.end || ""), note: String(e.note || ""), u: e.u || Date.now(),
+        };
+        n++;
+      }
+    }
+    // 名前は、こちらがまだ初期値のときだけ相手の設定を使う
+    const def = defaultState().names[p];
+    if (state.names[p] === def && data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
+  }
+  save();
+  return n;
+}
+async function askImport(code) {
+  let data;
+  try { data = await decodeShare(code); }
+  catch (e) { alert("共有リンクを読み取れませんでした：" + e.message); return; }
+  const count = (p) => Object.values(data.shifts[p] || {}).filter((e) => e?.type && e.type !== "none").length;
+  $("importSummary").textContent =
+    `${data.names?.him || "彼氏"}：${count("him")}日分、${data.names?.her || "彼女"}：${count("her")}日分。同じ日に両方入っている場合は、あとから入れた方を使います。`;
+  $("importDialog").returnValue = "";
+  $("importDialog").showModal();
+  $("importDialog").addEventListener("close", () => {
+    if ($("importDialog").returnValue !== "ok") return;
+    const n = mergeShare(data);
+    view = "us";
+    render();
+    alert(`${n}日分を更新しました`);
+  }, { once: true });
+}
+$("shareBtn").addEventListener("click", async () => {
+  const url = `${location.origin}${location.pathname}#share=${await encodeShare()}`;
+  const text = "ふたりのシフトを更新したよ。開くと取り込めます";
+  try {
+    if (navigator.share) { await navigator.share({ title: "ふたりのシフト", text, url }); return; }
+  } catch (e) { if (e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(url); alert("共有リンクをコピーしました。LINEなどに貼り付けて送ってください。"); }
+  catch { prompt("このリンクをコピーして送ってください", url); }
+});
+$("pasteShareBtn").addEventListener("click", () => {
+  const m = $("pasteShare").value.match(/share=([zj][A-Za-z0-9_-]+)/);
+  if (!m) { alert("共有リンクが見つかりませんでした"); return; }
+  $("pasteShare").value = "";
+  askImport(m[1]);
+});
+function checkHash() {
+  const m = location.hash.match(/share=([zj][A-Za-z0-9_-]+)/);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  askImport(m[1]);
+}
+window.addEventListener("hashchange", checkHash);
+
+// ---------- 画面切り替え・設定 ----------
+document.querySelector(".tabbar").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-view]");
+  if (!b) return;
+  if (b.dataset.view !== view && ocr) { ocr = null; renderOcr(); }
+  view = b.dataset.view;
+  render();
+  window.scrollTo(0, 0);
+});
+$("prevMonth").addEventListener("click", () => { cur = cur.m === 1 ? { y: cur.y - 1, m: 12 } : { y: cur.y, m: cur.m - 1 }; render(); });
+$("nextMonth").addEventListener("click", () => { cur = cur.m === 12 ? { y: cur.y + 1, m: 1 } : { y: cur.y, m: cur.m + 1 }; render(); });
+$("monthLabel").addEventListener("click", () => { const t = new Date(); cur = { y: t.getFullYear(), m: t.getMonth() + 1 }; render(); });
+
+for (const p of PEOPLE) {
+  const input = $(p === "him" ? "nameHim" : "nameHer");
+  input.value = state.names[p];
+  input.addEventListener("change", () => {
+    state.names[p] = input.value.trim().slice(0, 20) || defaultState().names[p];
+    input.value = state.names[p];
+    save(); renderNames();
+  });
+}
+function renderKeyStatus() {
+  let own = "", diet = "";
+  try { own = localStorage.getItem(KEY_KEY) || ""; diet = localStorage.getItem(DIET_KEY_KEY) || ""; } catch {}
+  $("keyStatus").textContent = own ? "設定済み" : diet ? "食事ログのキーを使います" : "未設定";
+}
+$("saveKey").addEventListener("click", () => {
+  setKey($("apiKey").value.trim());
+  $("apiKey").value = "";
+  renderKeyStatus();
+});
+$("clearAll").addEventListener("click", () => {
+  if (!confirm("このスマホに入っているふたり分のシフトをすべて消します。よろしいですか？")) return;
+  state.shifts = { him: {}, her: {} };
+  save(); render();
+});
+$("appVersion").textContent = APP_VERSION;
+$("forceUpdate").addEventListener("click", () => { location.replace(location.pathname + "?v=" + Date.now()); });
+
+renderKeyStatus();
+render();
+checkHash();
