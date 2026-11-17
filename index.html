@@ -41,8 +41,9 @@
             <button class="primary" type="submit" id="calcBtn">計算する</button>
           </div>
         </form>
-        <label class="photo-btn" id="photoBtn">写真から計算<input type="file" id="photoInput" accept="image/*" hidden></label>
-        <p class="hint" style="margin-top:6px">写真の推定は目安です。上の欄に「すき家」「ご飯少なめ」などを書いてから撮ると、補足として使われます。</p>
+        <label class="photo-btn" id="photoBtn">写真から計算<input type="file" id="photoInput" accept="image/*" multiple hidden></label>
+        <div id="photoTray"></div>
+        <p class="hint" style="margin-top:6px">1回の食事につき写真は6枚まで。何枚か追加してから「まとめて計算」を押します。推定は目安です。上の欄に「すき家」「ご飯少なめ」などを書くと補足として使われます。</p>
         <div id="candidate"></div>
       </div>
 

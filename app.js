@@ -168,7 +168,7 @@ function renderCandidate(extra = "") {
   const { items, source, note } = candidates;
   box.innerHTML = `<div class="cand">
     <div><b>この内容で記録しますか？</b><span class="badge ${source === "ai" || source === "photo" ? "ai" : ""}">${SOURCE_LABEL[source]}</span></div>
-    ${candidates.photoUrl ? `<img class="cand-photo" src="${candidates.photoUrl}" alt="送った写真">` : ""}
+    ${candidates.photoUrls?.length ? `<div class="thumbs">${candidates.photoUrls.map((u) => `<img src="${u}" alt="送った写真">`).join("")}</div>` : ""}
     <p class="note">数値は「1人前」あたりです。違っていたら直してから記録してください。</p>
     ${items.map((it, i) => `<div class="cand-item" data-i="${i}">
       <input class="name-input" data-k="name" value="${esc(it.name)}">
@@ -242,7 +242,8 @@ const OUTPUT_SCHEMA = {
 
 const PHOTO_PROMPT = `写真に写っている食事の栄養を推定してください。
 
-- 写っている料理・食品を見分けて、品ごとに items に入れてください。
+- 写真が複数あるときは、すべて同じ1回の食事です。全部の写真に写っている料理・食品を見分けて、品ごとに items に入れてください。
+- 同じ料理が別の写真や別の角度で写っていても、1品として数え、二重に数えないでください。
 - 写真から見える量（器の大きさ、ご飯の盛り、枚数・個数など）をもとに、写っている量そのものを1人前として値を出します。
 - チェーン店の商品やパッケージ（コンビニ商品など）だと判断できる場合は、その公式の栄養成分を使い、name に店名・商品名を入れてください。
 - 写真だけでは量や中身が確実にわからないので、confidence は確信がない限り "medium" か "low" にしてください。
@@ -261,7 +262,7 @@ async function photoToJpeg(file, maxSide = 1024) {
   return { dataUrl, base64: dataUrl.split(",")[1] };
 }
 
-async function estimateWithAI(text, photo = null) {
+async function estimateWithAI(text, photos = null) {
   const apiKey = getKey();
   if (!apiKey) throw new Error("APIキーが未設定です。「設定」画面で入力してください。");
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
@@ -276,9 +277,12 @@ async function estimateWithAI(text, photo = null) {
       system: SYSTEM_PROMPT,
       messages: [{
         role: "user",
-        content: photo
+        content: photos?.length
           ? [
-              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: photo.base64 } },
+              ...photos.flatMap((ph, i) => [
+                { type: "text", text: `写真${i + 1}` },
+                { type: "image", source: { type: "base64", media_type: "image/jpeg", data: ph.base64 } },
+              ]),
               { type: "text", text: PHOTO_PROMPT + (text ? `\n\n本人からの補足: ${text}` : "") },
             ]
           : `食べたもの: ${text}`,
@@ -300,8 +304,8 @@ async function estimateWithAI(text, photo = null) {
   if (!Array.isArray(data.items) || !data.items.length) throw new Error("該当する料理が見つかりませんでした。");
   const conf = { high: "公式値ベース", medium: "一般的な推定", low: "かなり大まかな推定" }[data.confidence] || "";
   return {
-    source: photo ? "photo" : "ai",
-    photoUrl: photo?.dataUrl,
+    source: photos?.length ? "photo" : "ai",
+    photoUrls: photos?.map((ph) => ph.dataUrl),
     note: [conf, data.note].filter(Boolean).join("。"),
     items: data.items.map((it) => ({
       name: it.name, kcal: it.kcal, p: it.protein_g, f: it.fat_g, c: it.carbs_g, qty: 1,
@@ -338,21 +342,48 @@ function showError(e) {
       <button type="button" id="manualBtn" style="width:100%;margin-top:8px">数値を手入力する</button>`);
 }
 
-async function calculateFromPhoto(file) {
+// 送る前に貯めておく写真（1回の食事ぶん）
+const MAX_PHOTOS = 6;
+let pendingPhotos = []; // {dataUrl, base64}
+
+function renderPhotoTray() {
+  const tray = $("photoTray");
+  if (!pendingPhotos.length) { tray.innerHTML = ""; $("photoBtn").firstChild.textContent = "写真から計算"; return; }
+  $("photoBtn").firstChild.textContent = pendingPhotos.length < MAX_PHOTOS ? "写真を追加" : `最大${MAX_PHOTOS}枚までです`;
+  tray.innerHTML = `<div class="thumbs">${pendingPhotos.map((ph, i) =>
+      `<div class="thumb"><img src="${ph.dataUrl}" alt="写真${i + 1}"><button type="button" data-rm="${i}" aria-label="写真${i + 1}を外す">×</button></div>`).join("")}</div>
+    <div class="row">
+      <button type="button" id="photoClear">クリア</button>
+      <button type="button" class="primary" id="photoGo">${pendingPhotos.length}枚まとめて計算</button>
+    </div>`;
+}
+
+async function addPhotos(files) {
+  const room = MAX_PHOTOS - pendingPhotos.length;
+  if (files.length > room) alert(`写真は1回の食事で${MAX_PHOTOS}枚までです。先の${room}枚だけ使います。`);
+  for (const f of [...files].slice(0, room)) {
+    try { pendingPhotos.push(await photoToJpeg(f)); }
+    catch { alert("読み込めない写真がありました：" + f.name); }
+  }
+  renderPhotoTray();
+}
+
+async function calculateFromPhotos() {
+  if (!pendingPhotos.length) return;
   const text = $("foodInput").value.trim();
-  const btn = $("photoBtn");
-  btn.classList.add("busy"); btn.firstChild.textContent = "写真を解析中…";
+  const go = $("photoGo");
+  go.disabled = true; go.textContent = "解析中…";
   candidates = null;
-  renderCandidate(`<p class="note">写真をAIで解析しています（10〜20秒ほど）…</p>`);
+  renderCandidate(`<p class="note">写真${pendingPhotos.length}枚をAIで解析しています（10〜30秒ほど）…</p>`);
   try {
-    const photo = await photoToJpeg(file);
-    candidates = await estimateWithAI(text, photo);
+    candidates = await estimateWithAI(text, pendingPhotos);
+    pendingPhotos = [];
+    renderPhotoTray();
     renderCandidate();
   } catch (e) {
     candidates = null;
     showError(e);
-  } finally {
-    btn.classList.remove("busy"); btn.firstChild.textContent = "写真から計算";
+    go.disabled = false; go.textContent = `${pendingPhotos.length}枚まとめて計算`;
   }
 }
 
@@ -559,9 +590,15 @@ $("entryForm").addEventListener("submit", (e) => {
 });
 
 $("photoInput").addEventListener("change", (e) => {
-  const file = e.target.files[0];
+  const files = [...e.target.files];
   e.target.value = "";
-  if (file) calculateFromPhoto(file);
+  if (files.length) addPhotos(files);
+});
+$("photoTray").addEventListener("click", (e) => {
+  const rm = e.target.closest("button[data-rm]");
+  if (rm) { pendingPhotos.splice(+rm.dataset.rm, 1); renderPhotoTray(); }
+  if (e.target.id === "photoClear") { pendingPhotos = []; renderPhotoTray(); }
+  if (e.target.id === "photoGo") calculateFromPhotos();
 });
 
 $("candidate").addEventListener("click", (e) => {
