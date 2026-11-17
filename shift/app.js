@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17v";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17w";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17v";
+const APP_VERSION = "2026-11-17w";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -655,19 +655,7 @@ $("saveKey").addEventListener("click", () => {
   $("apiKey").value = "";
   renderKeyStatus();
 });
-$("clearAll").addEventListener("click", () => {
-  if (!confirm(getRoom()
-    ? "ふたり分のシフトをすべて消します。同期しているので相手のアプリからも消えます。よろしいですか？"
-    : "このスマホに入っているふたり分のシフトをすべて消します。よろしいですか？")) return;
-  // 「消した」記録を残す（同期・共有したときに相手側でも消えるように）
-  const now = Date.now();
-  for (const p of PEOPLE) {
-    for (const date of Object.keys(state.shifts[p])) state.shifts[p][date] = { type: "none", label: "", start: "", end: "", note: "", u: now };
-    for (const date of Object.keys(state.avail[p])) state.avail[p][date] = { v: "", u: now };
-    for (const label of Object.keys(state.types[p])) state.types[p][label] = { ...state.types[p][label], del: true, u: now };
-  }
-  save(); render();
-});
+
 
 // ---------- 自動同期（Firebase） ----------
 const ROOM_KEY = "shiftcal.room";
