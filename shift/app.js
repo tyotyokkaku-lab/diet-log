@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17l";
+const APP_VERSION = "2026-11-17m";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -21,6 +21,7 @@ const WD = ["日", "月", "火", "水", "木", "金", "土"];
 const defaultState = () => ({
   names: { him: "彼氏", her: "彼女" },
   shifts: { him: {}, her: {} },
+  labelColors: {}, // シフト名 → 色（#rrggbb）。スクショの色や手で選んだ色
   avail: { him: {}, her: {} }, // avail[person][date] = { v: "ok"|"ng"|"", u }  会える○ / 無理✕
 });
 function load() {
@@ -33,6 +34,7 @@ function load() {
       names: { ...d.names, ...s.names },
       shifts: { him: s.shifts?.him || {}, her: s.shifts?.her || {} },
       avail: { him: s.avail?.him || {}, her: s.avail?.her || {} },
+      labelColors: s.labelColors || {},
     };
   } catch {
     return defaultState();
@@ -140,7 +142,12 @@ function renderPerson(p) {
 const PILL_COLORS = ["#3fae80", "#e0703f", "#a39c63", "#3f95e0", "#9d7bd8", "#5c7aa6", "#d39a2a", "#2f9e9e", "#c45f8f", "#7a8f3a"];
 // 初めて出てきたシフト名から順に色を割り当てて覚えておく（色かぶりを防ぐ）
 let colorMap = (() => { try { return JSON.parse(localStorage.getItem("shiftcal.colors") || "{}"); } catch { return {}; } })();
+// 元のシフトアプリの色（送ってもらったスクショから）
+const PRESET_COLORS = { 遅番: "#66c8a0", 中番: "#e47548", "2t": "#b2ad7b", 明け: "#a784d2", 日勤: "#e47548", 夜勤: "#49a3ed", 新町: "#6882a5" };
+const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
 function pillColor(key) {
+  if (isHex(state.labelColors[key])) return state.labelColors[key];
+  if (PRESET_COLORS[key]) return PRESET_COLORS[key];
   if (!(key in colorMap)) {
     const used = new Set(Object.values(colorMap));
     let i = PILL_COLORS.findIndex((_, k) => !used.has(k));
@@ -233,9 +240,19 @@ function fillDayForm() {
   $("dStart").value = e?.start || "";
   $("dEnd").value = e?.end || "";
   $("dNote").value = e?.note || "";
+  updateColorField();
   document.querySelectorAll("#dWho button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.who === editing.who));
   renderTypeSeg();
 }
+function updateColorField() {
+  const label = $("dLabel").value.trim();
+  $("dColorField").hidden = !label;
+  if (label) {
+    const c = pillColor(label);
+    $("dColor").value = isHex(c) ? c : "#888888";
+  }
+}
+$("dLabel").addEventListener("input", updateColorField);
 function renderTypeSeg() {
   $("dType").innerHTML = TYPES.map((t) =>
     `<button type="button" role="radio" data-type="${t.id}" aria-checked="${t.id === editing.type}" class="t-${t.id}">${t.label}</button>`).join("");
@@ -263,6 +280,10 @@ $("dayDialog").addEventListener("close", () => {
     end: isOff ? "" : $("dEnd").value,
     note: editing.type === "none" ? "" : $("dNote").value.trim(),
   });
+  const label = $("dLabel").value.trim();
+  if (!isOff && editing.type !== "none" && label && $("dColor").value.toLowerCase() !== pillColor(label).toLowerCase()) {
+    state.labelColors[label] = $("dColor").value.toLowerCase();
+  }
   save();
   render();
 });
@@ -341,8 +362,9 @@ const OCR_SCHEMA = {
           label: { type: "string", description: "画像に書かれていたシフト名・予定名（例：早番、A、飲み会）。なければ空文字" },
           start: { type: "string", description: "開始時刻 HH:MM（24時間）。わからなければ空文字" },
           end: { type: "string", description: "終了時刻 HH:MM（24時間）。わからなければ空文字" },
+          color: { type: "string", description: "画像でそのシフト名に付いている背景色（文字色ではなく）を #rrggbb で。色が付いていなければ空文字" },
         },
-        required: ["date", "type", "label", "start", "end"],
+        required: ["date", "type", "label", "start", "end", "color"],
         additionalProperties: false,
       },
     },
@@ -362,6 +384,7 @@ function ocrPrompt(who, hint) {
 - シフト表で、空欄が明らかに「休み」を意味している場合は "off" にしてください。カレンダーで単に何も書かれていない日は出力しないでください。
 - 時刻は24時間表記の HH:MM（例 "09:00"、"22:30"）。「9-18」なら start "09:00" end "18:00"。日をまたぐ場合も end はそのまま（例 "02:00"）。
 - 同じ日に複数の予定がある場合は1件にまとめ、仕事があれば type は "work" にしてください。
+- シフト名に色（背景色）が付いている場合は、その色を color に #rrggbb でできるだけ正確に入れてください。同じシフト名なら同じ色にしてください。
 - 推測しすぎず、読み取れたものだけを入れてください。${hint ? `\n\n本人からの補足：${hint}` : ""}`;
 }
 
@@ -404,7 +427,7 @@ async function readShots(who, hint) {
   const okTime = (t) => (/^\d{1,2}:\d{2}$/.test(t) ? t.padStart(5, "0") : "");
   const entries = (data.entries || [])
     .filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date) && !isNaN(parseDate(e.date)))
-    .map((e) => ({ date: e.date, type: e.type, label: e.label || "", start: okTime(e.start), end: okTime(e.end), on: true }))
+    .map((e) => ({ date: e.date, type: e.type, label: e.label || "", start: okTime(e.start), end: okTime(e.end), color: isHex(e.color) ? e.color.toLowerCase() : "", on: true }))
     .sort((a, b) => a.date.localeCompare(b.date));
   // 同じ日が重複したら後のものを使う
   const byDate = new Map(entries.map((e) => [e.date, e]));
@@ -443,7 +466,10 @@ $("ocrResult").addEventListener("change", (ev) => {
 $("ocrResult").addEventListener("click", (ev) => {
   if (ev.target.id !== "applyOcr") return;
   const picked = ocr.entries.filter((e) => e.on);
-  for (const e of picked) setShift(ocr.who, e.date, { ...e, note: "" });
+  for (const e of picked) {
+    setShift(ocr.who, e.date, { ...e, note: "" });
+    if (e.label && e.type !== "off" && e.color) state.labelColors[e.label] = e.color; // 元のアプリの色を引き継ぐ
+  }
   save();
   // 入れた予定の月を表示する
   if (picked.length) { const [y, m] = picked[0].date.split("-").map(Number); cur = { y, m }; }
@@ -477,7 +503,7 @@ async function pipe(bytes, stream) {
   return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
 }
 async function encodeShare() {
-  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts, avail: state.avail }));
+  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts, avail: state.avail, labelColors: state.labelColors }));
   if (typeof CompressionStream === "function") return "z" + b64url(await pipe(json, new CompressionStream("deflate-raw")));
   return "j" + b64url(json);
 }
@@ -513,6 +539,10 @@ function mergeShare(data) {
     // 名前は、こちらがまだ初期値のときだけ相手の設定を使う
     const def = defaultState().names[p];
     if (state.names[p] === def && data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
+  }
+  // 色は、こちらでまだ決めていないシフト名だけ相手の色を使う
+  for (const [label, c] of Object.entries(data.labelColors || {})) {
+    if (isHex(c) && !isHex(state.labelColors[label])) state.labelColors[label] = c.toLowerCase();
   }
   save();
   return n;
