@@ -11,6 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
+const APP_VERSION = "2026-11-17c";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -245,20 +246,33 @@ const PHOTO_PROMPT = `写真に写っている食事の栄養を推定してく�
 - 写真が複数あるときは、すべて同じ1回の食事です。全部の写真に写っている料理・食品を見分けて、品ごとに items に入れてください。
 - 同じ料理が別の写真や別の角度で写っていても、1品として数え、二重に数えないでください。
 - 写真から見える量（器の大きさ、ご飯の盛り、枚数・個数など）をもとに、写っている量そのものを1人前として値を出します。
+- 栄養成分表示（ラベル・パッケージ裏面の「熱量」「たんぱく質」「脂質」「炭水化物」など）が読み取れる場合は、推定せずにその数値をそのまま使い、confidence を "high" にしてください。「1包装当り」「100g当り」など、表示の単位にも注意します。name は商品名にします。
 - チェーン店の商品やパッケージ（コンビニ商品など）だと判断できる場合は、その公式の栄養成分を使い、name に店名・商品名を入れてください。
 - 写真だけでは量や中身が確実にわからないので、confidence は確信がない限り "medium" か "low" にしてください。
 - note には、何と判断したか・前提にした量を短く書いてください。`;
 
 // 写真を長辺1024pxのJPEGに縮小してbase64にする（通信量と料金を抑えるため）
+// iPhoneのSafariでも確実に動くよう、<img> で読み込んでから canvas に描く
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めませんでした")); };
+    img.src = url;
+  });
+}
 async function photoToJpeg(file, maxSide = 1024) {
-  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const img = await loadImage(file);
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  if (!iw || !ih) throw new Error("画像のサイズを読み取れませんでした");
+  const scale = Math.min(1, maxSide / Math.max(iw, ih));
+  const w = Math.round(iw * scale), h = Math.round(ih * scale);
   const cv = document.createElement("canvas");
   cv.width = w; cv.height = h;
-  cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
-  bmp.close?.();
+  cv.getContext("2d").drawImage(img, 0, 0, w, h);
   const dataUrl = cv.toDataURL("image/jpeg", 0.85);
+  if (!dataUrl.startsWith("data:image/jpeg")) throw new Error("画像の変換に失敗しました");
   return { dataUrl, base64: dataUrl.split(",")[1] };
 }
 
@@ -363,7 +377,7 @@ async function addPhotos(files) {
   if (files.length > room) alert(`写真は1回の食事で${MAX_PHOTOS}枚までです。先の${room}枚だけ使います。`);
   for (const f of [...files].slice(0, room)) {
     try { pendingPhotos.push(await photoToJpeg(f)); }
-    catch { alert("読み込めない写真がありました：" + f.name); }
+    catch (err) { alert(`読み込めない写真がありました（${f.name || "写真"}）：${err.message}`); }
   }
   renderPhotoTray();
 }
@@ -589,10 +603,16 @@ $("entryForm").addEventListener("submit", (e) => {
   calculate(text, num($("qtyInput").value) || 1);
 });
 
-$("photoInput").addEventListener("change", (e) => {
-  const files = [...e.target.files];
-  e.target.value = "";
-  if (files.length) addPhotos(files);
+$("photoInput").addEventListener("change", async (e) => {
+  const input = e.target;
+  const files = [...input.files];
+  if (!files.length) return;
+  $("photoTray").innerHTML = `<p class="note">写真を読み込んでいます…</p>`;
+  try {
+    await addPhotos(files);
+  } finally {
+    input.value = ""; // 読み込みが終わってから空にする（同じ写真を選び直せるように）
+  }
 });
 $("photoTray").addEventListener("click", (e) => {
   const rm = e.target.closest("button[data-rm]");
@@ -744,4 +764,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !$("view-today").hidden) renderToday();
 });
 
+// 予期しないエラーを画面に出す（スマホでは原因がわかりにくいため）
+window.addEventListener("error", (e) => alert("エラー：" + (e.message || e.error)));
+window.addEventListener("unhandledrejection", (e) => alert("エラー：" + (e.reason?.message || e.reason)));
+
+$("appVersion").textContent = APP_VERSION;
 renderToday();
