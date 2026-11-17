@@ -1,7 +1,7 @@
 // ふたりのシフトを Firebase（Firestore）で自動同期する
 // rooms/{合言葉} の1つのドキュメントに、日にちごとの予定を入れる。
 // 同じ日を両方が変えたときは、更新時刻 u が新しい方を使う。
-import { FIREBASE_CONFIG } from "./firebase-config.js";
+import { FIREBASE_CONFIG } from "./firebase-config.js?v=2026-11-17p";
 
 export const syncConfigured = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 
@@ -31,7 +31,8 @@ export async function startSync(room, { onRemote, onStatus }) {
   const myRef = ref;
   unsub = fb.onSnapshot(myRef, { includeMetadataChanges: true }, (snap) => {
     if (ref !== myRef) return;
-    if (!snap.metadata.fromCache || remote === null) {
+    // サーバーから届いた内容だけを正とする（スマホに残っていた古い内容で上書きしないように）
+    if (!snap.metadata.fromCache) {
       remote = snap.data() || {};
       onRemote(remote);
     }
@@ -62,7 +63,9 @@ export function pushDiff(state, people) {
     if (remote.labelColors?.[label] !== c) put(["labelColors", label], c);
   }
   for (const p of people) {
-    if (state.names[p] && remote.names?.[p] !== state.names[p]) put(["names", p], state.names[p]);
+    // 初期値の「彼氏」「彼女」のままなら送らない（相手が付けた名前を消さないように）
+    const def = p === "him" ? "彼氏" : "彼女";
+    if (state.names[p] && state.names[p] !== def && remote.names?.[p] !== state.names[p]) put(["names", p], state.names[p]);
   }
   if (!Object.keys(patch).length) return;
   // 送った内容を覚えておく（同じものを何度も送らないように）

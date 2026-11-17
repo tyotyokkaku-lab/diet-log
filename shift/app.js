@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17p";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17n";
+const APP_VERSION = "2026-11-17p";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
