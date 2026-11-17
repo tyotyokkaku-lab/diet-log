@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17u";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17v";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17u";
+const APP_VERSION = "2026-11-17v";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -194,9 +194,12 @@ const PILL_COLORS = ["#3fae80", "#e0703f", "#a39c63", "#3f95e0", "#9d7bd8", "#5c
 // 初めて出てきたシフト名から順に色を割り当てて覚えておく（色かぶりを防ぐ）
 let colorMap = (() => { try { return JSON.parse(localStorage.getItem("shiftcal.colors") || "{}"); } catch { return {}; } })();
 // 元のシフトアプリの色（送ってもらったスクショから）
-const PRESET_COLORS = { 遅番: "#66c8a0", 中番: "#e47548", "2t": "#b2ad7b", 明け: "#a784d2", 日勤: "#e47548", 夜勤: "#49a3ed", 新町: "#6882a5" };
+const PRESET_COLORS = { "2t": "#b2ad7b", 明け: "#a784d2", 新町: "#6882a5" };
+// 固定の色（スクショの色や手で選んだ色より優先。遅番＝夜勤の青、中番＝日勤のオレンジ）
+const FIXED_COLORS = { 遅番: "#49a3ed", 夜勤: "#49a3ed", 中番: "#e47548", 日勤: "#e47548" };
 const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
 function pillColor(key) {
+  if (FIXED_COLORS[key]) return FIXED_COLORS[key];
   if (isHex(state.labelColors[key])) return state.labelColors[key];
   if (PRESET_COLORS[key]) return PRESET_COLORS[key];
   if (!(key in colorMap)) {
@@ -298,7 +301,7 @@ function fillDayForm() {
 }
 function updateColorField() {
   const label = $("dLabel").value.trim();
-  $("dColorField").hidden = !label;
+  $("dColorField").hidden = !label || !!FIXED_COLORS[label]; // 固定の色のシフトは色を選ばせない
   if (label) {
     const c = pillColor(label);
     $("dColor").value = isHex(c) ? c : "#888888";
@@ -583,10 +586,18 @@ function openType(label) {
   $("tStart").value = t?.start || "";
   $("tEnd").value = t?.end || "";
   $("tColor").value = label ? pillColor(label) : "#3f95e0";
+  updateTypeColorField();
   $("tDelete").hidden = !label;
   $("typeDialog").returnValue = "";
   $("typeDialog").showModal();
 }
+function updateTypeColorField() {
+  const fixed = FIXED_COLORS[$("tName").value.trim()];
+  $("tColor").disabled = !!fixed;
+  if (fixed) $("tColor").value = fixed;
+  $("tColorNote").hidden = !fixed;
+}
+$("tName").addEventListener("input", updateTypeColorField);
 $("typeDialog").addEventListener("close", () => {
   const rv = $("typeDialog").returnValue;
   if (!typeEditing || (rv !== "save" && rv !== "delete")) return;

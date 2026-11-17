@@ -1,7 +1,7 @@
 // ふたりのシフトを Firebase（Firestore）で自動同期する
 // rooms/{合言葉} の1つのドキュメントに、日にちごとの予定を入れる。
 // 同じ日を両方が変えたときは、更新時刻 u が新しい方を使う。
-import { FIREBASE_CONFIG } from "./firebase-config.js?v=2026-11-17u";
+import { FIREBASE_CONFIG } from "./firebase-config.js?v=2026-11-17v";
 
 export const syncConfigured = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 

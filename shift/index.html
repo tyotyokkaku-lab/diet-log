@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-17u">
+  <link rel="stylesheet" href="style.css?v=2026-11-17v">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -157,6 +157,7 @@
         <label class="field"><span>終了</span><input id="tEnd" type="time"></label>
       </div>
       <label class="field color-field"><span>色</span><input id="tColor" type="color"></label>
+      <p class="hint" id="tColorNote" hidden>このシフトの色は固定です（遅番・夜勤は青、中番・日勤はオレンジ）。</p>
       <p class="hint">名前や時間を変えると、この種類が入っている日にもまとめて反映されます（時間を個別に変えた日はそのまま）。</p>
       <div class="row">
         <button value="delete" class="danger" id="tDelete" formnovalidate>種類から外す</button>
@@ -166,6 +167,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-17u"></script>
+  <script type="module" src="app.js?v=2026-11-17v"></script>
 </body>
 </html>
