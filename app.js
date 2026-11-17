@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-17d";
+const APP_VERSION = "2026-11-17e";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -479,6 +479,12 @@ $("editDialog").addEventListener("close", () => {
 
 // ---------- 履歴 ----------
 const fmt = (v, unit = "") => (v == null ? "—" : r0(v) + unit);
+// 記録がある日だけ合計を返す（記録のない日は null）
+function dayTotal(d) {
+  if (!hasEntries(d) && !state.pastDays[d]) return null;
+  const t = totalsFor(d);
+  return t.kcal == null ? null : t;
+}
 function averages(dates) {
   const sum = { kcal: [0, 0], p: [0, 0], f: [0, 0], c: [0, 0] };
   for (const d of dates) {
@@ -487,24 +493,86 @@ function averages(dates) {
   }
   return Object.fromEntries(Object.entries(sum).map(([k, [v, n]]) => [k, n ? v / n : null]));
 }
-function avgBlock(title, dates) {
-  const days = dates.filter((d) => totalsFor(d).kcal != null);
+// 目標に対する状態。kcal・F・Cは「超えたら超過」、Pは「足りないと不足」
+const STATUS = {
+  ok: { label: "目標内", icon: "✓", cls: "st-ok" },
+  over: { label: "超過", icon: "▲", cls: "st-over" },
+  under: { label: "不足", icon: "▼", cls: "st-under" },
+};
+function statusOf(key, pct) {
+  if (key === "p") return pct < 90 ? "under" : "ok";
+  return pct > 105 ? "over" : "ok";
+}
+
+// 1. 平均の目標比（横棒。縦線が目標100%）
+function goalBars(a, g) {
+  const MAX = 150; // 横軸は0〜150%
+  const row = (k, label, unit) => {
+    if (a[k] == null) return `<div class="gb-row"><span class="gb-name">${label}</span><div class="gb-track"></div><span class="gb-val">—</span></div>`;
+    const pct = (a[k] / g[k]) * 100;
+    const st = STATUS[statusOf(k, pct)];
+    return `<div class="gb-row" title="${label} 平均 ${r0(a[k])}${unit}（目標 ${r0(g[k])}${unit}）">
+      <span class="gb-name">${label}</span>
+      <div class="gb-track"><i class="${st.cls}" style="width:${(Math.min(pct, MAX) / MAX) * 100}%"></i><b class="gb-goal" style="left:${(100 / MAX) * 100}%"></b></div>
+      <span class="gb-val">${r0(pct)}%<small class="gb-st"><span class="${st.cls}-ink">${st.icon}</span>${st.label}</small></span>
+    </div>`;
+  };
+  return `<div class="gb">${row("kcal", "カロリー", "kcal")}${row("p", "P", "g")}${row("f", "F", "g")}${row("c", "C", "g")}
+    <div class="gb-axis"><span></span><div class="gb-axis-track"><span style="left:${(100 / 150) * 100}%">目標</span></div><span></span></div></div>`;
+}
+
+// 2. 日ごとのカロリー（縦棒。横の点線が目標）
+function dailyBars(dayList, g) {
+  const vals = dayList.map((d) => dayTotal(d)?.kcal ?? null);
+  const top = Math.max(g.kcal * 1.4, ...vals.filter((v) => v != null));
+  const goalY = (g.kcal / top) * 100;
+  let over = 0, ok = 0;
+  const bars = dayList.map((d, i) => {
+    const v = vals[i];
+    const md = d.slice(5).replace("-", "/").replace(/^0/, "");
+    if (v == null) return `<button class="db-bar" data-tip="${md} 記録なし"><i class="db-none"></i></button>`;
+    const isOver = v > g.kcal * 1.05;
+    isOver ? over++ : ok++;
+    const diff = v - g.kcal;
+    return `<button class="db-bar" data-tip="${md}　${r0(v)} kcal（${diff > 0 ? "+" : ""}${r0(diff)}）${isOver ? "超過" : "目標内"}">
+      <i class="${isOver ? "st-over" : "st-ok"}" style="height:${(v / top) * 100}%"></i></button>`;
+  }).join("");
+  const first = dayList[0].slice(5).replace("-", "/"), last = dayList[dayList.length - 1].slice(5).replace("-", "/");
+  return `<div class="db">
+    <div class="db-head"><span>日ごとのカロリー</span>
+      <span><span class="st-over-ink">▲</span>超過 <b>${over}日</b>　<span class="st-ok-ink">✓</span>目標内 <b>${ok}日</b></span></div>
+    <div class="db-legend"><i class="db-key-line"></i>目標 ${r0(g.kcal)} kcal</div>
+    <div class="db-plot ${dayList.length > 10 ? "dense" : ""}">
+      <b class="db-goal" style="bottom:${goalY}%"></b>${bars}</div>
+    <div class="db-x"><span>${first}</span><span>${last}</span></div>
+    <div class="db-tip hint">棒をタップすると、その日の値が出ます</div>
+  </div>`;
+}
+
+function avgBlock(title, n) {
+  const t = todayStr();
+  const dayList = Array.from({ length: n }, (_, i) => shiftDate(t, i - n)); // 昨日までのn日（古い順）
+  const days = dayList.filter((d) => dayTotal(d) != null);
   if (!days.length) return "";
   const a = averages(days), g = goalGrams();
   const cell = (k, label, unit) => {
     if (a[k] == null) return `<div>${label}<br><b>—</b></div>`;
     const pc = (a[k] / g[k]) * 100;
-    return `<div>${label}<br><b>${r0(a[k])}${unit}</b><br><small class="${pc > 105 ? "over" : pc < 90 ? "under" : ""}">${r0(pc)}%</small></div>`;
+    const st = statusOf(k, pc);
+    return `<div>${label}<br><b>${r0(a[k])}${unit}</b><br><small class="${st === "over" ? "over" : st === "under" ? "under" : ""}">${r0(pc)}%</small></div>`;
   };
-  return `<div class="avg"><div class="hint" style="margin:0 0 4px">${title}（${days.length}日分の平均・目標比）</div>
-    <div class="avg-grid">${cell("kcal", "kcal", "")}${cell("p", "P", "g")}${cell("f", "F", "g")}${cell("c", "C", "g")}</div></div>`;
+  return `<div class="avg"><div class="hint" style="margin:0 0 4px">${title}（記録のある${days.length}日分の平均・目標比）</div>
+    <div class="avg-grid">${cell("kcal", "kcal", "")}${cell("p", "P", "g")}${cell("f", "F", "g")}${cell("c", "C", "g")}</div>
+    ${goalBars(a, g)}
+    ${dailyBars(dayList, g)}
+    <p class="gb-note">基準：カロリー・F・Cは目標の105%を超えたら「超過」、Pは目標の90%未満で「不足」</p></div>`;
 }
 function renderHistory() {
   const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays)])].sort().reverse();
   if (!dates.length) { $("historyList").innerHTML = `<p class="empty">まだ記録がありません</p>`; $("historyAvg").innerHTML = ""; return; }
   const t = todayStr();
   const within = (n) => dates.filter((d) => d < t && d >= shiftDate(t, -n));
-  $("historyAvg").innerHTML = avgBlock("直近7日", within(7)) + avgBlock("直近30日", within(30));
+  $("historyAvg").innerHTML = avgBlock("直近7日", 7) + avgBlock("直近30日", 30);
   const g = goalGrams();
   $("historyList").innerHTML = dates.map((d) => {
     const x = totalsFor(d);
@@ -637,6 +705,14 @@ $("entryList").addEventListener("click", (e) => {
   if (b) openEdit(b.dataset.id);
 });
 
+$("historyAvg").addEventListener("click", (e) => {
+  const b = e.target.closest(".db-bar");
+  if (!b) return;
+  const box = b.closest(".db");
+  box.querySelectorAll(".db-bar.sel").forEach((x) => x.classList.remove("sel"));
+  b.classList.add("sel");
+  box.querySelector(".db-tip").textContent = b.dataset.tip;
+});
 $("historyList").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-date]");
   if (!b) return;

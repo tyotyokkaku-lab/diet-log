@@ -175,3 +175,40 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .paste-box summary { cursor: pointer; min-height: 24px; }
 .paste-box textarea { width: 100%; margin: 8px 0; font: inherit; font-size: 14px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
 .paste-box button { width: 100%; }
+
+/* 目標比グラフ */
+:root { --st-ok: #0ca30c; --st-over: #d03b3b; --st-under: #fab219; --grid: #e1e0d9; --axis: #c3c2b7; }
+@media (prefers-color-scheme: dark) { :root { --grid: #2c2c2a; --axis: #383835; } }
+.st-ok { background: var(--st-ok); }
+.st-over { background: var(--st-over); }
+.st-under { background: var(--st-under); }
+.st-ok-ink { color: var(--st-ok); margin-right: 2px; }
+.st-over-ink { color: var(--st-over); margin-right: 2px; }
+.st-under-ink { color: var(--st-under); margin-right: 2px; }
+.gb { margin-top: 12px; }
+.gb-row, .gb-axis { display: grid; grid-template-columns: 64px 1fr 92px; align-items: center; gap: 8px; }
+.gb-row { min-height: 30px; }
+.gb-name { font-size: .82rem; color: var(--text); }
+.gb-track { position: relative; height: 12px; background: var(--grid); border-radius: 4px; }
+.gb-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; }
+.gb-goal { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); }
+.gb-val { font-size: .85rem; font-weight: 600; text-align: right; color: var(--text); white-space: nowrap; }
+.gb-st { font-weight: 500; color: var(--muted); margin-left: 6px; font-size: .78rem; }
+.gb-axis-track { position: relative; height: 16px; font-size: .68rem; color: var(--muted); }
+.gb-axis-track span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.db { margin-top: 14px; }
+.db-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
+.db-head b { color: var(--text); }
+.db-plot { position: relative; height: 110px; display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid var(--axis); }
+.db-plot.dense { gap: 2px; }
+.db-bar { all: unset; flex: 1; height: 100%; display: flex; align-items: flex-end; cursor: pointer; min-width: 0; }
+.db-bar i { display: block; width: 100%; border-radius: 4px 4px 0 0; }
+.db-plot.dense .db-bar i { border-radius: 2px 2px 0 0; }
+.db-bar .db-none { height: 3px; background: var(--grid); border-radius: 2px; }
+.db-bar.sel i { outline: 2px solid var(--text); outline-offset: 1px; }
+.db-goal { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed var(--text); opacity: .55; pointer-events: none; z-index: 1; }
+.db-legend { display: flex; align-items: center; gap: 6px; font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
+.db-key-line { display: inline-block; width: 18px; border-top: 2px dashed var(--text); opacity: .55; }
+.db-x { display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); margin-top: 2px; }
+.db-tip { margin: 4px 0 0; min-height: 1.4em; }
+.gb-note { font-size: .72rem; color: var(--muted); margin: 10px 0 0; }
