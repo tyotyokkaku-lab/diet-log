@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>食事ログ</title>
+  <meta name="theme-color" content="#2f7d5b">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="食事ログ">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="prevDay" aria-label="前の日">‹</button>
+    <button class="date-btn" id="dateLabel"></button>
+    <button class="icon-btn" id="nextDay" aria-label="次の日">›</button>
+    <input type="date" id="datePicker" class="sr-only">
+  </header>
+
+  <main>
+    <!-- 今日 -->
+    <section id="view-today" class="view">
+      <div class="card summary" id="summary"></div>
+
+      <div class="card">
+        <form id="entryForm" autocomplete="off">
+          <div class="meal-tabs" id="mealTabs" role="radiogroup" aria-label="食事区分"></div>
+          <label class="field">
+            <span>食べたもの</span>
+            <input id="foodInput" list="dictList" placeholder="例：すき家 牛丼 並盛" required>
+            <datalist id="dictList"></datalist>
+          </label>
+          <div class="row">
+            <label class="field qty">
+              <span>量（人前）</span>
+              <input id="qtyInput" type="number" inputmode="decimal" step="0.1" min="0.1" value="1">
+            </label>
+            <button class="primary" type="submit" id="calcBtn">計算する</button>
+          </div>
+        </form>
+        <div id="candidate"></div>
+      </div>
+
+      <div id="entryList"></div>
+    </section>
+
+    <!-- 履歴 -->
+    <section id="view-history" class="view" hidden>
+      <div class="card"><h2>履歴</h2><div id="historyList"></div></div>
+    </section>
+
+    <!-- 設定 -->
+    <section id="view-settings" class="view" hidden>
+      <div class="card">
+        <h2>目標</h2>
+        <form id="goalForm">
+          <label class="field"><span>1日の目標カロリー（kcal）</span>
+            <input id="goalKcal" type="number" inputmode="numeric" min="800" max="5000" step="10"></label>
+          <div class="row three">
+            <label class="field"><span>P（%）</span><input id="goalP" type="number" inputmode="numeric" min="0" max="100"></label>
+            <label class="field"><span>F（%）</span><input id="goalF" type="number" inputmode="numeric" min="0" max="100"></label>
+            <label class="field"><span>C（%）</span><input id="goalC" type="number" inputmode="numeric" min="0" max="100"></label>
+          </div>
+          <p class="hint" id="goalPreview"></p>
+          <button class="primary" type="submit">保存</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Claude APIキー</h2>
+        <p class="hint">このスマホのブラウザの中にだけ保存されます。</p>
+        <form id="keyForm">
+          <label class="field"><span>APIキー</span>
+            <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
+          <div class="row">
+            <button class="primary" type="submit">保存</button>
+            <button type="button" id="clearKey">削除</button>
+          </div>
+          <p class="hint" id="keyStatus"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>マイ辞書</h2>
+        <p class="hint">記録したメニューは、ここに1人前の値で登録されます。次からはAIを使わずにすぐ計算できます。</p>
+        <input id="dictFilter" placeholder="絞り込み" class="filter">
+        <div id="dictTable"></div>
+      </div>
+
+      <div class="card">
+        <h2>データ</h2>
+        <div class="stack">
+          <button type="button" id="exportCsv">記録をCSVで書き出す</button>
+          <button type="button" id="exportJson">全データをバックアップ（JSON）</button>
+          <label class="file-btn">バックアップから復元<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-view="today" class="active">今日</button>
+    <button data-view="history">履歴</button>
+    <button data-view="settings">設定</button>
+  </nav>
+
+  <dialog id="editDialog">
+    <form method="dialog" id="editForm">
+      <h3>記録を編集</h3>
+      <label class="field"><span>メニュー名</span><input id="eName" required></label>
+      <div class="row">
+        <label class="field"><span>食事</span><select id="eMeal"></select></label>
+        <label class="field"><span>量（人前）</span><input id="eQty" type="number" inputmode="decimal" step="0.1" min="0.1"></label>
+      </div>
+      <p class="hint">下の数値は「1人前」あたりです。</p>
+      <div class="row four">
+        <label class="field"><span>kcal</span><input id="eKcal" type="number" inputmode="decimal" step="any"></label>
+        <label class="field"><span>P</span><input id="eP" type="number" inputmode="decimal" step="any"></label>
+        <label class="field"><span>F</span><input id="eF" type="number" inputmode="decimal" step="any"></label>
+        <label class="field"><span>C</span><input id="eC" type="number" inputmode="decimal" step="any"></label>
+      </div>
+      <div class="row">
+        <button value="delete" class="danger" id="eDelete">削除</button>
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
