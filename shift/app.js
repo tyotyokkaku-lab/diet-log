@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17s";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17t";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17s";
+const APP_VERSION = "2026-11-17t";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -125,7 +125,7 @@ function timeText(e) {
 }
 function chipHtml(e) {
   if (!e) return `<span class="chip empty">–</span>`;
-  if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休")}</span>`;
+  if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休み")}</span>`;
   const main = e.label || (e.type === "work" ? (timeText(e) ? "" : "仕事") : "予定");
   const t = timeText(e);
   // ふたりタブと同じ色（シフト名ごとの色）
