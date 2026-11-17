@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17f";
+const APP_VERSION = "2026-11-17g";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -517,13 +517,26 @@ function mergeShare(data) {
   save();
   return n;
 }
-async function askImport(code) {
+// ホーム画面に追加したアプリと Safari は保存場所が別。リンクを Safari で開いたときは、アプリで取り込むよう案内する
+const isStandalone = () => navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+async function askImport(code, fromLink = false) {
   let data;
   try { data = await decodeShare(code); }
   catch (e) { alert("共有リンクを読み取れませんでした：" + e.message); return; }
   const count = (p) => Object.values(data.shifts[p] || {}).filter((e) => e?.type && e.type !== "none").length;
   $("importSummary").textContent =
     `${data.names?.him || "彼氏"}：${count("him")}日分、${data.names?.her || "彼女"}：${count("her")}日分。同じ日に両方入っている場合は、あとから入れた方を使います。`;
+  const inBrowser = fromLink && isIOS && !isStandalone();
+  $("importBrowserNote").hidden = !inBrowser;
+  $("importCopy").hidden = !inBrowser;
+  $("importCopy").onclick = async () => {
+    const url = `${location.origin}${location.pathname}#share=${code}`;
+    try { await navigator.clipboard.writeText(url); $("importCopy").textContent = "コピーしました"; }
+    catch { prompt("このリンクをコピーしてください", url); }
+  };
+  $("importCopy").textContent = "リンクをコピー";
   $("importDialog").returnValue = "";
   $("importDialog").showModal();
   $("importDialog").addEventListener("close", () => {
@@ -536,12 +549,23 @@ async function askImport(code) {
 }
 $("shareBtn").addEventListener("click", async () => {
   const url = `${location.origin}${location.pathname}#share=${await encodeShare()}`;
-  const text = "ふたりのシフトを更新したよ。開くと取り込めます";
+  const text = "ふたりのシフトを更新したよ。リンクを長押しでコピーして、アプリの「ふたり」→「受け取ったリンクを取り込む」で入れてね";
   try {
     if (navigator.share) { await navigator.share({ title: "ふたりのシフト", text, url }); return; }
   } catch (e) { if (e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(url); alert("共有リンクをコピーしました。LINEなどに貼り付けて送ってください。"); }
   catch { prompt("このリンクをコピーして送ってください", url); }
+});
+$("receiveBtn").addEventListener("click", async () => {
+  let text = "";
+  try { text = await navigator.clipboard.readText(); } catch {}
+  let m = text.match(/share=([zj][A-Za-z0-9_-]+)/);
+  if (!m) {
+    text = prompt("受け取った共有リンクを貼り付けてください") || "";
+    m = text.match(/share=([zj][A-Za-z0-9_-]+)/);
+    if (!m) { if (text) alert("共有リンクが見つかりませんでした"); return; }
+  }
+  askImport(m[1]);
 });
 $("pasteShareBtn").addEventListener("click", () => {
   const m = $("pasteShare").value.match(/share=([zj][A-Za-z0-9_-]+)/);
@@ -553,7 +577,7 @@ function checkHash() {
   const m = location.hash.match(/share=([zj][A-Za-z0-9_-]+)/);
   if (!m) return;
   history.replaceState(null, "", location.pathname + location.search);
-  askImport(m[1]);
+  askImport(m[1], true);
 }
 window.addEventListener("hashchange", checkHash);
 
