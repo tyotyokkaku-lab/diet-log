@@ -601,3 +601,15 @@ $("forceUpdate").addEventListener("click", () => { location.replace(location.pat
 renderKeyStatus();
 render();
 checkHash();
+
+// 公開中の最新版と違えば、自動で読み込み直す（Safariが古いページを覚えていることがあるため）
+(async () => {
+  try {
+    const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
+    const v = (await r.text()).trim();
+    if (r.ok && v && v !== APP_VERSION && !sessionStorage.getItem("shiftcal.reloaded." + v)) {
+      sessionStorage.setItem("shiftcal.reloaded." + v, "1");
+      location.replace(location.pathname + "?v=" + Date.now() + location.hash);
+    }
+  } catch {}
+})();
