@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17r";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17s";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17r";
+const APP_VERSION = "2026-11-17s";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -24,6 +24,7 @@ const defaultState = () => ({
   shifts: { him: {}, her: {} },
   labelColors: {}, // シフト名 → 色（#rrggbb）。スクショの色や手で選んだ色
   avail: { him: {}, her: {} }, // avail[person][date] = { v: "ok"|"ng"|"", u }  会える○ / 無理✕
+  types: { him: {}, her: {} }, // シフトの種類 types[person][名前] = { start, end, u, del? }
 });
 function load() {
   try {
@@ -36,12 +37,41 @@ function load() {
       shifts: { him: s.shifts?.him || {}, her: s.shifts?.her || {} },
       avail: { him: s.avail?.him || {}, her: s.avail?.her || {} },
       labelColors: s.labelColors || {},
+      types: { him: s.types?.him || {}, her: s.types?.her || {} },
     };
   } catch {
     return defaultState();
   }
 }
 let state = load();
+const OFF_WORD = /^(休|休み|公休|有給|有休|希望休|OFF|オフ|×)$/i;
+// これまでに入っているシフトから「シフトの種類」を作る（よく使われている時間をその種類の時間にする）
+function typesFromShifts(p) {
+  const by = {};
+  for (const e of Object.values(state.shifts[p])) {
+    if (e.type !== "work" || !e.label || OFF_WORD.test(e.label)) continue;
+    const k = `${e.start}|${e.end}`;
+    ((by[e.label] ||= {})[k] = (by[e.label][k] || 0) + 1);
+  }
+  for (const [label, times] of Object.entries(by)) {
+    if (state.types[p][label]) continue;
+    const [start, end] = Object.entries(times).sort((a, b) => b[1] - a[1])[0][0].split("|");
+    state.types[p][label] = { start, end, u: 1 };
+  }
+}
+for (const p of ["him", "her"]) typesFromShifts(p);
+function ensureType(p, label, start, end) {
+  if (!label || OFF_WORD.test(label)) return;
+  const t = state.types[p][label];
+  if (!t || t.del) state.types[p][label] = { start: start || "", end: end || "", u: Date.now() };
+}
+function typeList(p) {
+  const count = {};
+  for (const e of Object.values(state.shifts[p])) if (e.type === "work" && e.label) count[e.label] = (count[e.label] || 0) + 1;
+  return Object.entries(state.types[p]).filter(([, t]) => !t.del)
+    .sort((a, b) => (count[b[0]] || 0) - (count[a[0]] || 0) || a[0].localeCompare(b[0], "ja"))
+    .map(([label, t]) => ({ label, ...t }));
+}
 function saveLocal() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { alert("保存できませんでした：" + e.message); }
@@ -137,7 +167,17 @@ function calendarHtml(cellFn) {
 
 const bothOff = (date) => getShift("him", date)?.type === "off" && getShift("her", date)?.type === "off";
 
+function typeBtnHtml(t, attrs = "") {
+  const time = t.start || t.end ? `${hm(t.start)}〜${hm(t.end)}` : "";
+  return `<button type="button" class="type-btn" style="--pc:${pillColor(t.label)}" ${attrs}><b>${esc(t.label)}</b>${time ? `<small>${esc(time)}</small>` : ""}</button>`;
+}
+function renderTypes(p) {
+  const list = typeList(p);
+  $("typeList").innerHTML = list.map((t) => typeBtnHtml(t, `data-tl="${esc(t.label)}"`)).join("")
+    + `<button type="button" class="type-add" id="typeAdd">＋ 追加</button>`;
+}
 function renderPerson(p) {
+  renderTypes(p);
   $("personTitle").innerHTML = `<i class="dot ${p}"></i>${esc(nm(p))}のシフト`;
   $("ocrWho").textContent = nm(p);
   $("personCal").innerHTML = calendarHtml((date) => {
@@ -187,7 +227,8 @@ function renderUs() {
         <button type="button" class="ng" data-av="ng" data-who="${p}" data-d="${date}" aria-pressed="${a === "ng"}" aria-label="${esc(nm(p))}：無理">✕</button>
       </div>`;
   };
-  const shift = (p, date) => `<button type="button" class="us-shift" data-date="${date}" data-who="${p}">${pillHtml(getShift(p, date))}</button>`;
+  // ふたりタブは見るだけ（シフトの変更はそれぞれのカレンダーで）
+  const shift = (p, date) => `<div class="us-shift">${pillHtml(getShift(p, date))}</div>`;
   let rows = "";
   for (let d = 1; d <= n; d++) {
     const date = ymd(cur.y, cur.m, d);
@@ -261,10 +302,27 @@ function updateColorField() {
   }
 }
 $("dLabel").addEventListener("input", updateColorField);
+function renderQuick() {
+  const list = editing.type === "work" ? typeList(editing.who) : [];
+  $("dQuick").hidden = !list.length;
+  const cur = $("dLabel").value.trim();
+  $("dQuick").innerHTML = list.map((t) => typeBtnHtml(t, `data-q="${esc(t.label)}" aria-pressed="${t.label === cur}"`)).join("");
+}
+$("dQuick").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-q]");
+  if (!b) return;
+  const t = state.types[editing.who][b.dataset.q];
+  $("dLabel").value = b.dataset.q;
+  $("dStart").value = t?.start || "";
+  $("dEnd").value = t?.end || "";
+  updateColorField(); renderQuick();
+});
+$("dLabel").addEventListener("input", () => renderQuick());
 function renderTypeSeg() {
   $("dType").innerHTML = TYPES.map((t) =>
     `<button type="button" role="radio" data-type="${t.id}" aria-checked="${t.id === editing.type}" class="t-${t.id}">${t.label}</button>`).join("");
   $("dWorkFields").hidden = editing.type === "off" || editing.type === "none";
+  renderQuick();
 }
 $("dWho").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-who]");
@@ -295,6 +353,7 @@ $("dayDialog").addEventListener("close", () => {
   if (!isOff && editing.type !== "none" && label && $("dColor").value.toLowerCase() !== pillColor(label).toLowerCase()) {
     state.labelColors[label] = $("dColor").value.toLowerCase();
   }
+  if (editing.type === "work") ensureType(editing.who, label, $("dStart").value, $("dEnd").value);
   save();
   render();
 });
@@ -305,9 +364,11 @@ document.querySelector("main").addEventListener("click", (ev) => {
     save(); render();
     return;
   }
+  const tb = ev.target.closest("[data-tl], #typeAdd");
+  if (tb) { openType(tb.dataset.tl || ""); return; }
   const b = ev.target.closest("[data-date]");
-  if (!b) return;
-  openDay(b.dataset.date, PEOPLE.includes(view) ? view : (b.dataset.who || "him"));
+  if (!b || !PEOPLE.includes(view)) return;
+  openDay(b.dataset.date, view);
 });
 
 // ---------- スクショ読み取り ----------
@@ -480,6 +541,7 @@ $("ocrResult").addEventListener("click", (ev) => {
   for (const e of picked) {
     setShift(ocr.who, e.date, { ...e, note: "" });
     if (e.label && e.type !== "off" && e.color) state.labelColors[e.label] = e.color; // 元のアプリの色を引き継ぐ
+    if (e.type === "work") ensureType(ocr.who, e.label, e.start, e.end);
   }
   save();
   // 入れた予定の月を表示する
@@ -505,6 +567,46 @@ $("ocrBtn").addEventListener("click", async () => {
     btn.textContent = "読み取る";
     btn.disabled = !shots.length;
   }
+});
+
+// ---------- シフトの種類（名前・色・時間） ----------
+let typeEditing = null; // { who, label }
+function openType(label) {
+  const who = view;
+  typeEditing = { who, label };
+  const t = label ? state.types[who][label] : null;
+  $("tTitle").textContent = label ? `${nm(who)}のシフト「${label}」` : `${nm(who)}のシフトを追加`;
+  $("tName").value = label;
+  $("tStart").value = t?.start || "";
+  $("tEnd").value = t?.end || "";
+  $("tColor").value = label ? pillColor(label) : "#3f95e0";
+  $("tDelete").hidden = !label;
+  $("typeDialog").returnValue = "";
+  $("typeDialog").showModal();
+}
+$("typeDialog").addEventListener("close", () => {
+  const rv = $("typeDialog").returnValue;
+  if (!typeEditing || (rv !== "save" && rv !== "delete")) return;
+  const { who, label: old } = typeEditing;
+  const now = Date.now();
+  if (rv === "delete") {
+    state.types[who][old] = { ...state.types[who][old], del: true, u: now };
+    save(); render(); return;
+  }
+  const name = $("tName").value.trim().slice(0, 12);
+  if (!name || OFF_WORD.test(name)) { alert("シフトの名前を入れてください（「休み」は種類にできません）"); return; }
+  const prev = old ? state.types[who][old] : null;
+  const start = $("tStart").value, end = $("tEnd").value;
+  // この種類が入っている日をまとめて直す（名前を変えたとき、時間を変えたとき）
+  for (const [date, e] of Object.entries(state.shifts[who])) {
+    if (!old || e.type !== "work" || e.label !== old) continue;
+    const sameTime = !prev || (e.start === prev.start && e.end === prev.end) || (!e.start && !e.end);
+    state.shifts[who][date] = { ...e, label: name, start: sameTime ? start : e.start, end: sameTime ? end : e.end, u: now };
+  }
+  if (old && old !== name) state.types[who][old] = { ...prev, del: true, u: now };
+  state.types[who][name] = { start, end, u: now };
+  state.labelColors[name] = $("tColor").value.toLowerCase();
+  save(); render();
 });
 
 // ---------- 画面切り替え・設定 ----------
@@ -548,6 +650,7 @@ $("clearAll").addEventListener("click", () => {
   for (const p of PEOPLE) {
     for (const date of Object.keys(state.shifts[p])) state.shifts[p][date] = { type: "none", label: "", start: "", end: "", note: "", u: now };
     for (const date of Object.keys(state.avail[p])) state.avail[p][date] = { v: "", u: now };
+    for (const label of Object.keys(state.types[p])) state.types[p][label] = { ...state.types[p][label], del: true, u: now };
   }
   save(); render();
 });
@@ -581,11 +684,17 @@ function applyRemote(data) {
       const mine = state.avail[p][date];
       if (!mine || (a.u || 0) > (mine.u || 0)) state.avail[p][date] = { v: ["ok", "ng"].includes(a.v) ? a.v : "", u: a.u || 0 };
     }
+    for (const [label, t] of Object.entries(data.types?.[p] || {})) {
+      if (!t || typeof t !== "object") continue;
+      const mine = state.types[p][label];
+      if (!mine || (t.u || 0) > (mine.u || 0)) state.types[p][label] = { start: String(t.start || ""), end: String(t.end || ""), u: t.u || 0, ...(t.del ? { del: true } : {}) };
+    }
     if (data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
   }
   for (const [label, c] of Object.entries(data.labelColors || {})) {
     if (/^#[0-9a-f]{6}$/i.test(c)) state.labelColors[label] = c;
   }
+  for (const p of PEOPLE) typesFromShifts(p);
   saveLocal();
   pushDiff(state, PEOPLE); // こちらにしかない・こちらの方が新しいものを送る
   for (const p of PEOPLE) $(p === "him" ? "nameHim" : "nameHer").value = state.names[p];

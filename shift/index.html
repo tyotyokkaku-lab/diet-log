@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-17r">
+  <link rel="stylesheet" href="style.css?v=2026-11-17s">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -26,6 +26,12 @@
         <h2 id="personTitle"></h2>
         <div id="personCal"></div>
         <p class="hint">日にちをタップすると手で入力・修正できます。</p>
+      </div>
+
+      <div class="card">
+        <h2>シフトの種類</h2>
+        <p class="hint">タップすると名前・色・時間を変えられます。日にちを入れるときに、ここの種類をボタンで選べます。</p>
+        <div class="type-list" id="typeList"></div>
       </div>
 
       <div class="card">
@@ -59,7 +65,7 @@
         <div id="usHead"></div>
         </div>
         <div id="usCal"></div>
-        <p class="hint">予定の部分をタップすると修正できます。</p>
+        <p class="hint">ここは見るだけです。シフトの変更はそれぞれのカレンダーで行えます。</p>
         <p class="sync-line" id="usSyncLine" hidden></p>
       </div>
     </section>
@@ -125,6 +131,7 @@
       <div class="seg" id="dWho"></div>
       <div class="seg" id="dType" role="radiogroup" aria-label="種類"></div>
       <div id="dWorkFields">
+        <div class="quick" id="dQuick" hidden></div>
         <label class="field"><span>名前（任意）</span><input id="dLabel" placeholder="例：早番 / 遅番 / 飲み会"></label>
         <div class="row">
           <label class="field"><span>開始</span><input id="dStart" type="time"></label>
@@ -141,6 +148,24 @@
   </dialog>
 
 
-  <script type="module" src="app.js?v=2026-11-17r"></script>
+  <dialog id="typeDialog">
+    <form method="dialog">
+      <h3 id="tTitle"></h3>
+      <label class="field"><span>名前</span><input id="tName" maxlength="12" placeholder="例：遅番"></label>
+      <div class="row">
+        <label class="field"><span>開始</span><input id="tStart" type="time"></label>
+        <label class="field"><span>終了</span><input id="tEnd" type="time"></label>
+      </div>
+      <label class="field color-field"><span>色</span><input id="tColor" type="color"></label>
+      <p class="hint">名前や時間を変えると、この種類が入っている日にもまとめて反映されます（時間を個別に変えた日はそのまま）。</p>
+      <div class="row">
+        <button value="delete" class="danger" id="tDelete" formnovalidate>種類から外す</button>
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js?v=2026-11-17s"></script>
 </body>
 </html>

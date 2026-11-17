@@ -1,7 +1,7 @@
 // ふたりのシフトを Firebase（Firestore）で自動同期する
 // rooms/{合言葉} の1つのドキュメントに、日にちごとの予定を入れる。
 // 同じ日を両方が変えたときは、更新時刻 u が新しい方を使う。
-import { FIREBASE_CONFIG } from "./firebase-config.js?v=2026-11-17r";
+import { FIREBASE_CONFIG } from "./firebase-config.js?v=2026-11-17s";
 
 export const syncConfigured = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 
@@ -51,7 +51,7 @@ export function pushDiff(state, people) {
     for (const k of path.slice(0, -1)) o = o[k] ||= {};
     o[path[path.length - 1]] = v;
   };
-  for (const kind of ["shifts", "avail"]) {
+  for (const kind of ["shifts", "avail", "types"]) {
     for (const p of people) {
       for (const [date, e] of Object.entries(state[kind][p] || {})) {
         const r = remote[kind]?.[p]?.[date];
