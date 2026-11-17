@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17b";
+const APP_VERSION = "2026-11-17c";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -21,6 +21,7 @@ const WD = ["日", "月", "火", "水", "木", "金", "土"];
 const defaultState = () => ({
   names: { him: "彼氏", her: "彼女" },
   shifts: { him: {}, her: {} },
+  avail: { him: {}, her: {} }, // avail[person][date] = { v: "ok"|"ng"|"", u }  会える○ / 無理✕
 });
 function load() {
   try {
@@ -28,7 +29,11 @@ function load() {
     if (!raw) return defaultState();
     const s = JSON.parse(raw);
     const d = defaultState();
-    return { names: { ...d.names, ...s.names }, shifts: { him: s.shifts?.him || {}, her: s.shifts?.her || {} } };
+    return {
+      names: { ...d.names, ...s.names },
+      shifts: { him: s.shifts?.him || {}, her: s.shifts?.her || {} },
+      avail: { him: s.avail?.him || {}, her: s.avail?.her || {} },
+    };
   } catch {
     return defaultState();
   }
@@ -61,6 +66,11 @@ function getShift(p, date) {
 }
 function setShift(p, date, e) {
   state.shifts[p][date] = { type: e.type, label: e.label || "", start: e.start || "", end: e.end || "", note: e.note || "", u: Date.now() };
+}
+
+const getAvail = (p, date) => state.avail[p][date]?.v || "";
+function toggleAvail(p, date, v) {
+  state.avail[p][date] = { v: getAvail(p, date) === v ? "" : v, u: Date.now() };
 }
 
 // "09:00" → "9"、"09:30" → "9:30"
@@ -126,19 +136,34 @@ function renderPerson(p) {
 }
 
 function renderUs() {
-  $("usCal").innerHTML = calendarHtml((date) => ({
-    cls: "us" + (bothOff(date) ? " maybe" : ""),
-    inner: `<div class="half him">${chipHtml(getShift("him", date))}</div>
-            <div class="gap"></div>
-            <div class="half her">${chipHtml(getShift("her", date))}</div>
-            ${bothOff(date) ? `<span class="heart" aria-label="2人とも休み">♡</span>` : ""}`,
-  }));
-  const days = monthDays(cur.y, cur.m).filter((d) => d && bothOff(d));
   const today = todayStr();
-  $("maybeList").innerHTML = days.length
-    ? days.map((d) => `<button type="button" class="maybe-row ${d < today ? "past" : ""}" data-date="${d}">
-        <b>${dateLabel(d)}</b><span>2人とも休み</span></button>`).join("")
-    : `<p class="empty">${cur.m}月はまだ「2人とも休み」の日がありません</p>`;
+  const n = new Date(cur.y, cur.m, 0).getDate();
+  const side = (p, date) => {
+    const a = getAvail(p, date);
+    return `<div class="us-side ${p}">
+      <button type="button" class="us-shift" data-date="${date}" data-who="${p}">${chipHtml(getShift(p, date))}</button>
+      <div class="ox">
+        <button type="button" class="ok" data-av="ok" data-who="${p}" data-d="${date}" aria-pressed="${a === "ok"}" aria-label="${esc(nm(p))}：行ける">○</button>
+        <button type="button" class="ng" data-av="ng" data-who="${p}" data-d="${date}" aria-pressed="${a === "ng"}" aria-label="${esc(nm(p))}：無理">✕</button>
+      </div>
+    </div>`;
+  };
+  let rows = "";
+  for (let d = 1; d <= n; d++) {
+    const date = ymd(cur.y, cur.m, d);
+    const dow = parseDate(date).getDay();
+    const bothOk = getAvail("him", date) === "ok" && getAvail("her", date) === "ok";
+    const cls = [bothOff(date) && "both-off", bothOk && "both-ok", date === today && "today", date < today && "past", dow === 0 && "sun", dow === 6 && "sat"].filter(Boolean).join(" ");
+    rows += `<div class="us-row ${cls}">
+      <div class="us-date"><b>${d}</b><small>${WD[dow]}</small></div>
+      ${side("him", date)}
+      <div class="us-mid">${bothOk ? `<span class="heart" aria-label="2人とも○">♡</span>` : ""}</div>
+      ${side("her", date)}
+    </div>`;
+  }
+  $("usCal").innerHTML = `<div class="us-list">
+    <div class="us-head"><span></span><span><i class="dot him"></i>${esc(nm("him"))}</span><span></span><span><i class="dot her"></i>${esc(nm("her"))}</span></div>
+    ${rows}</div>`;
 }
 
 function renderNames() {
@@ -210,9 +235,15 @@ $("dayDialog").addEventListener("close", () => {
   render();
 });
 document.querySelector("main").addEventListener("click", (ev) => {
+  const av = ev.target.closest("[data-av]");
+  if (av) {
+    toggleAvail(av.dataset.who, av.dataset.d, av.dataset.av);
+    save(); render();
+    return;
+  }
   const b = ev.target.closest("[data-date]");
   if (!b) return;
-  openDay(b.dataset.date, PEOPLE.includes(view) ? view : "him");
+  openDay(b.dataset.date, PEOPLE.includes(view) ? view : (b.dataset.who || "him"));
 });
 
 // ---------- スクショ読み取り ----------
@@ -414,7 +445,7 @@ async function pipe(bytes, stream) {
   return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
 }
 async function encodeShare() {
-  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts }));
+  const json = new TextEncoder().encode(JSON.stringify({ v: 1, names: state.names, shifts: state.shifts, avail: state.avail }));
   if (typeof CompressionStream === "function") return "z" + b64url(await pipe(json, new CompressionStream("deflate-raw")));
   return "j" + b64url(json);
 }
@@ -436,6 +467,14 @@ function mergeShare(data) {
           type: TYPES.some((t) => t.id === e.type) ? e.type : "none",
           label: String(e.label || ""), start: String(e.start || ""), end: String(e.end || ""), note: String(e.note || ""), u: e.u || Date.now(),
         };
+        n++;
+      }
+    }
+    for (const [date, a] of Object.entries(data.avail?.[p] || {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !a || typeof a !== "object") continue;
+      const mine = state.avail[p][date];
+      if (!mine || (a.u || 0) > (mine.u || 0)) {
+        state.avail[p][date] = { v: ["ok", "ng"].includes(a.v) ? a.v : "", u: a.u || Date.now() };
         n++;
       }
     }
@@ -521,6 +560,7 @@ $("saveKey").addEventListener("click", () => {
 $("clearAll").addEventListener("click", () => {
   if (!confirm("このスマホに入っているふたり分のシフトをすべて消します。よろしいですか？")) return;
   state.shifts = { him: {}, her: {} };
+  state.avail = { him: {}, her: {} };
   save(); render();
 });
 $("appVersion").textContent = APP_VERSION;

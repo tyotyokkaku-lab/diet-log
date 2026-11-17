@@ -144,29 +144,45 @@ input, select, textarea {
 .chip.plan { background: var(--plan-soft); color: var(--plan); }
 .chip.empty { color: var(--muted); opacity: .5; }
 
-/* ふたりのカレンダー：上が彼氏、すき間、下が彼女 */
-.day.us { min-height: 84px; }
-.day.us .half { border-left: 3px solid; border-radius: 4px; padding-left: 1px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.day.us .half .chip { margin-top: 0; }
-.day.us .half.him { border-color: var(--him); background: var(--him-soft); }
-.day.us .half.her { border-color: var(--her); background: var(--her-soft); }
-.day.us .gap { height: 5px; flex: none; }
-.day.us .chip.work { background: none; }
-.day.us.maybe { background: var(--maybe); border-color: var(--maybe-line); }
-.day.us.maybe .half { background: transparent; }
-.day.us.today { border-color: var(--text); }
-.heart { position: absolute; top: 1px; right: 3px; font-size: .72rem; color: var(--accent); line-height: 1.2; }
-
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .78rem; color: var(--muted); margin-bottom: 8px; }
+/* ふたり：1日1行。左に彼氏、真ん中のすき間、右に彼女 */
+.us-card { padding: 10px 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .78rem; color: var(--muted); margin: 0 4px 8px; }
 .legend span { display: inline-flex; align-items: center; gap: 4px; }
-.legend b { color: var(--text); font-weight: 600; }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; }
-.sw.maybe { background: var(--maybe); border: 1px solid var(--maybe-line); }
+.sw.both-off { background: var(--maybe); border: 1px solid var(--maybe-line); }
+.ox-key { color: var(--off); }
+.ox-key.ng { color: var(--danger); margin-left: 4px; }
+.heart-key { color: var(--accent); }
 
-.maybe-row { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 10px 4px; border-top: 1px solid var(--line); }
-.maybe-row:first-child { border-top: none; }
-.maybe-row span { color: var(--accent); font-size: .88rem; }
-.maybe-row.past { opacity: .5; }
+.us-list { display: flex; flex-direction: column; }
+.us-head, .us-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 30px minmax(0, 1fr); align-items: stretch; column-gap: 0; }
+.us-head { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 2; background: var(--card); font-size: .8rem; font-weight: 600; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+.us-head span { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.us-row { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.us-row.past { opacity: .5; }
+.us-row.today .us-date b { background: var(--text); color: var(--card); border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
+.us-date { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.us-date b { font-size: .95rem; }
+.us-date small { font-size: .68rem; color: var(--muted); }
+.us-row.sun .us-date, .us-row.sun .us-date small { color: var(--sun); }
+.us-row.sat .us-date, .us-row.sat .us-date small { color: var(--sat); }
+
+.us-side { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 8px; min-width: 0; }
+.us-side.him { border-left: 3px solid var(--him); background: var(--him-soft); }
+.us-side.her { border-left: 3px solid var(--her); background: var(--her-soft); }
+.us-shift { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+.us-shift .chip { margin: 0; font-size: .82rem; max-width: 100%; }
+.us-shift .chip small { font-size: .7rem; }
+.us-shift .chip.off { font-size: .9rem; }
+.us-shift .chip.work { background: none; }
+.ox { display: flex; gap: 3px; flex: none; }
+.ox button { min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: .85rem; font-weight: 700; color: var(--muted); background: var(--card); line-height: 1; }
+.ox button.ok[aria-pressed="true"] { background: var(--off); border-color: var(--off); color: #fff; }
+.ox button.ng[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.us-mid { display: flex; align-items: center; justify-content: center; margin: 0 3px; border-radius: 8px; }
+.us-row.both-off .us-mid { background: var(--maybe); border: 1px solid var(--maybe-line); }
+.us-mid .heart { color: var(--accent); font-size: 1.1rem; font-weight: 700; }
 
 /* ---- スクショ ---- */
 .photo-btn { display: block; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; margin-bottom: 8px; }
