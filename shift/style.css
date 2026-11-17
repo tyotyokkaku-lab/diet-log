@@ -145,7 +145,7 @@ input, select, textarea {
 .chip.empty { color: var(--muted); opacity: .5; }
 
 /* ふたり：1日1行。左に彼氏、真ん中のすき間、右に彼女 */
-.us-card { padding: 8px 0 4px; overflow: hidden; margin-top: 6px; }
+.us-card { padding: 8px 0 4px; margin-top: 6px; }
 .us-card > .hint { margin: 8px 12px 4px; }
 .us-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin: 0 10px 6px; }
 .legend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: .68rem; color: var(--muted); }
@@ -161,7 +161,7 @@ input, select, textarea {
 
 .us-list { display: flex; flex-direction: column; }
 .us-head, .us-row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto 18px minmax(0, 1fr) auto; align-items: center; }
-.us-head { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 2; background: var(--card); font-size: .8rem; font-weight: 700; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.us-head { position: sticky; top: var(--topbar-h, calc(56px + env(safe-area-inset-top))); z-index: 2; background: var(--card); font-size: .8rem; font-weight: 700; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .us-head span { display: flex; align-items: center; gap: 4px; padding-left: 6px; }
 .us-head .h-him { grid-column: 2 / 4; }
 .us-head .h-her { grid-column: 5 / 7; }

@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17g";
+const APP_VERSION = "2026-11-17h";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -621,6 +621,14 @@ $("clearAll").addEventListener("click", () => {
 });
 $("appVersion").textContent = APP_VERSION;
 $("forceUpdate").addEventListener("click", () => { location.replace(location.pathname + "?v=" + Date.now()); });
+
+// 名前の見出しを、上のバーのすぐ下に貼り付けるため実際の高さを測る（ホーム画面アプリだと上の余白が変わる）
+function measureTopbar() {
+  document.documentElement.style.setProperty("--topbar-h", document.querySelector(".topbar").offsetHeight + "px");
+}
+measureTopbar();
+addEventListener("resize", measureTopbar);
+addEventListener("orientationchange", () => setTimeout(measureTopbar, 300));
 
 renderKeyStatus();
 render();
