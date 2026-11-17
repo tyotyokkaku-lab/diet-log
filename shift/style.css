@@ -258,3 +258,8 @@ dialog .row .field { min-width: 0; }
 .quick .type-btn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 1px; }
 .type-add { min-height: 0; padding: 5px 12px; border-style: dashed; color: var(--muted); font-size: .85rem; }
 .us-shift { cursor: default; }
+
+/* 長いシフト名はカレンダーのマスで文字を小さくして全部見せる */
+.chip b.fit4 { font-size: .62rem; letter-spacing: -.06em; text-overflow: clip; }
+.chip b.fit5 { font-size: .52rem; letter-spacing: -.07em; text-overflow: clip; }
+.chip b.fit6 { font-size: .52rem; letter-spacing: -.05em; white-space: normal; line-height: 1.1; word-break: break-all; overflow: visible; }

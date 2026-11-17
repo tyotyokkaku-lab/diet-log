@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17t";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17u";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17t";
+const APP_VERSION = "2026-11-17u";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -129,7 +129,10 @@ function chipHtml(e) {
   const main = e.label || (e.type === "work" ? (timeText(e) ? "" : "仕事") : "予定");
   const t = timeText(e);
   // ふたりタブと同じ色（シフト名ごとの色）
-  return `<span class="chip ${e.type}" style="--pc:${pillColor(e.label || t || e.type)}">${main ? `<b>${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
+  // 名前が長いときは文字を小さくして全部見えるようにする（全角1文字=1、半角=0.55で数える）
+  const w = [...(main || "")].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 0.55 : 1), 0);
+  const fit = w <= 3 ? "" : w <= 4 ? "fit4" : w <= 5 ? "fit5" : "fit6";
+  return `<span class="chip ${e.type}" style="--pc:${pillColor(e.label || t || e.type)}">${main ? `<b class="${fit}">${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
 }
 function describe(e) {
   if (!e) return "未設定";
