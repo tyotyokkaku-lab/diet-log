@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-17f";
+const APP_VERSION = "2026-11-17g";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -517,7 +517,7 @@ function goalBars(a, g) {
       <span class="gb-val">${r0(pct)}%<small class="gb-st"><span class="${st.cls}-ink">${st.icon}</span>${st.label}</small></span>
     </div>`;
   };
-  return `<div class="gb">${row("kcal", "カロリー", "kcal")}${row("p", "P", "g")}${row("f", "F", "g")}${row("c", "C", "g")}
+  return `<div class="gb">${row("kcal", "カロリー", "kcal")}${row("p", "たんぱく質", "g")}${row("f", "脂質", "g")}${row("c", "炭水化物", "g")}
     <div class="gb-axis"><span></span><div class="gb-axis-track"><span style="left:${(100 / 150) * 100}%">目標</span></div><span></span></div></div>`;
 }
 
@@ -562,10 +562,10 @@ function avgBlock(title, n) {
     return `<div>${label}<br><b>${r0(a[k])}${unit}</b><br><small class="${st === "over" ? "over" : st === "under" ? "under" : ""}">${r0(pc)}%</small></div>`;
   };
   return `<div class="avg"><div class="hint" style="margin:0 0 4px">${title}（記録のある${days.length}日分の平均・目標比）</div>
-    <div class="avg-grid">${cell("kcal", "kcal", "")}${cell("p", "P", "g")}${cell("f", "F", "g")}${cell("c", "C", "g")}</div>
+    <div class="avg-grid">${cell("kcal", "カロリー", "")}${cell("p", "たんぱく質", "g")}${cell("f", "脂質", "g")}${cell("c", "炭水化物", "g")}</div>
     ${goalBars(a, g)}
     ${dailyBars(dayList, g)}
-    <p class="gb-note">基準：カロリー・F・Cは目標の105%を超えたら「超過」、Pは目標の90%未満で「不足」</p></div>`;
+    <p class="gb-note">基準：カロリー・脂質・炭水化物は目標の105%を超えたら「超過」、たんぱく質は目標の90%未満で「不足」</p></div>`;
 }
 function renderHistory() {
   const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays)])].sort().reverse();
