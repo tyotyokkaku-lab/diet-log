@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-17m">
+  <link rel="stylesheet" href="style.css?v=2026-11-17n">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -60,8 +60,9 @@
         </div>
         <div id="usCal"></div>
         <p class="hint">予定の部分をタップすると修正できます。</p>
+        <p class="sync-line" id="usSyncLine" hidden></p>
       </div>
-      <div class="card">
+      <div class="card" id="manualShare">
         <h2>相手と共有する</h2>
         <p class="hint">データはこのスマホの中にだけ保存されます。共有リンクを作ってLINEなどで送り、相手は届いたリンクをコピーして「受け取ったリンクを取り込む」を押すと、ふたり分のシフトが取り込まれます（新しく入れた方が優先）。</p>
         <div class="stack">
@@ -78,6 +79,29 @@
         <div class="row">
           <label class="field"><span>彼氏</span><input id="nameHim"></label>
           <label class="field"><span>彼女</span><input id="nameHer"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>自動で同期する</h2>
+        <div id="syncNotReady">
+          <p class="hint">準備中です（Firebaseの設定がまだ入っていません）。</p>
+        </div>
+        <div id="syncOff" hidden>
+          <p class="hint">同じ「合言葉」を入れたふたりのアプリが、自動で同じ内容になります。どちらか片方が「新しく始める」を押して、出てきた合言葉を相手に送ってください。</p>
+          <button type="button" class="primary wide" id="syncCreate">新しく始める（合言葉を作る）</button>
+          <p class="hint" style="margin-top:14px">相手から合言葉が届いた方は、ここに貼り付けて「つなぐ」を押してください。</p>
+          <div class="row">
+            <label class="field"><input id="syncCode" placeholder="合言葉" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+            <button type="button" id="syncJoin">つなぐ</button>
+          </div>
+        </div>
+        <div id="syncOn" hidden>
+          <p><span class="sync-state" id="syncState"></span></p>
+          <p class="hint">合言葉：<code id="syncRoom"></code></p>
+          <div class="stack">
+            <button type="button" id="syncInvite">合言葉を相手に送る</button>
+            <button type="button" class="danger" id="syncStop">同期をやめる</button>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -142,6 +166,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-17m"></script>
+  <script type="module" src="app.js?v=2026-11-17n"></script>
 </body>
 </html>

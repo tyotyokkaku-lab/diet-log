@@ -1,11 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17m";
+const APP_VERSION = "2026-11-17n";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -41,9 +42,16 @@ function load() {
   }
 }
 let state = load();
-function save() {
+function saveLocal() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { alert("保存できませんでした：" + e.message); }
+}
+let pushTimer = null;
+function save() {
+  saveLocal();
+  // 自動同期中なら、少しまとめてからサーバーに送る
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => pushDiff(state, PEOPLE), 300);
 }
 function getKey() {
   try { return localStorage.getItem(KEY_KEY) || localStorage.getItem(DIET_KEY_KEY) || ""; } catch { return ""; }
@@ -644,10 +652,107 @@ $("saveKey").addEventListener("click", () => {
   renderKeyStatus();
 });
 $("clearAll").addEventListener("click", () => {
-  if (!confirm("このスマホに入っているふたり分のシフトをすべて消します。よろしいですか？")) return;
-  state.shifts = { him: {}, her: {} };
-  state.avail = { him: {}, her: {} };
+  if (!confirm(getRoom()
+    ? "ふたり分のシフトをすべて消します。同期しているので相手のアプリからも消えます。よろしいですか？"
+    : "このスマホに入っているふたり分のシフトをすべて消します。よろしいですか？")) return;
+  // 「消した」記録を残す（同期・共有したときに相手側でも消えるように）
+  const now = Date.now();
+  for (const p of PEOPLE) {
+    for (const date of Object.keys(state.shifts[p])) state.shifts[p][date] = { type: "none", label: "", start: "", end: "", note: "", u: now };
+    for (const date of Object.keys(state.avail[p])) state.avail[p][date] = { v: "", u: now };
+  }
   save(); render();
+});
+
+// ---------- 自動同期（Firebase） ----------
+const ROOM_KEY = "shiftcal.room";
+function getRoom() { try { return localStorage.getItem(ROOM_KEY) || ""; } catch { return ""; } }
+function setRoom(v) { try { v ? localStorage.setItem(ROOM_KEY, v) : localStorage.removeItem(ROOM_KEY); } catch {} }
+const normRoom = (s) => (s || "").replace(/^.*room=/, "").replace(/[^A-Za-z0-9]/g, "");
+function newRoom() {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789"; // 見間違えやすい文字は使わない
+  const b = crypto.getRandomValues(new Uint8Array(20));
+  return Array.from(b, (x) => chars[x % chars.length]).join("");
+}
+let syncStatus = { text: "", ok: false };
+
+function applyRemote(data) {
+  for (const p of PEOPLE) {
+    for (const [date, e] of Object.entries(data.shifts?.[p] || {})) {
+      if (!e || typeof e !== "object") continue;
+      const mine = state.shifts[p][date];
+      if (!mine || (e.u || 0) > (mine.u || 0)) {
+        state.shifts[p][date] = {
+          type: TYPES.some((t) => t.id === e.type) ? e.type : "none",
+          label: String(e.label || ""), start: String(e.start || ""), end: String(e.end || ""), note: String(e.note || ""), u: e.u || 0,
+        };
+      }
+    }
+    for (const [date, a] of Object.entries(data.avail?.[p] || {})) {
+      if (!a || typeof a !== "object") continue;
+      const mine = state.avail[p][date];
+      if (!mine || (a.u || 0) > (mine.u || 0)) state.avail[p][date] = { v: ["ok", "ng"].includes(a.v) ? a.v : "", u: a.u || 0 };
+    }
+    if (data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
+  }
+  for (const [label, c] of Object.entries(data.labelColors || {})) {
+    if (/^#[0-9a-f]{6}$/i.test(c)) state.labelColors[label] = c;
+  }
+  saveLocal();
+  pushDiff(state, PEOPLE); // こちらにしかない・こちらの方が新しいものを送る
+  for (const p of PEOPLE) $(p === "him" ? "nameHim" : "nameHer").value = state.names[p];
+  if (!$("dayDialog").open) render();
+}
+
+function connectSync() {
+  const room = getRoom();
+  if (!syncConfigured || !room) { stopSync(); renderSync(); return; }
+  startSync(room, {
+    onRemote: applyRemote,
+    onStatus: (text, ok) => { syncStatus = { text, ok }; renderSync(); },
+  });
+}
+
+function renderSync() {
+  const room = getRoom();
+  const on = syncConfigured && !!room;
+  $("syncNotReady").hidden = syncConfigured;
+  $("syncOff").hidden = !syncConfigured || !!room;
+  $("syncOn").hidden = !on;
+  $("manualShare").hidden = on;
+  $("usSyncLine").hidden = !on;
+  if (on) {
+    $("syncRoom").textContent = room;
+    $("syncState").textContent = syncStatus.text;
+    $("syncState").className = "sync-state " + (syncStatus.ok ? "ok" : "");
+    $("usSyncLine").textContent = (syncStatus.ok ? "● " : "○ ") + syncStatus.text;
+    $("usSyncLine").className = "sync-line " + (syncStatus.ok ? "ok" : "");
+  }
+}
+
+$("syncCreate").addEventListener("click", () => {
+  setRoom(newRoom());
+  connectSync(); renderSync();
+  $("syncInvite").click();
+});
+$("syncJoin").addEventListener("click", () => {
+  const code = normRoom($("syncCode").value);
+  if (code.length < 20) { alert("合言葉が短いようです。届いた合言葉をそのまま貼り付けてください。"); return; }
+  setRoom(code);
+  $("syncCode").value = "";
+  connectSync(); renderSync();
+});
+$("syncInvite").addEventListener("click", async () => {
+  const room = getRoom();
+  const text = `ふたりのシフトの合言葉：\n${room}\n\nアプリの「設定」→「自動で同期する」の「合言葉を入れる」に貼り付けてね`;
+  try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(room); alert("合言葉をコピーしました。LINEなどで相手に送ってください。"); }
+  catch { prompt("この合言葉を相手に送ってください", room); }
+});
+$("syncStop").addEventListener("click", () => {
+  if (!confirm("自動同期をやめますか？（このスマホのシフトは残ります。相手のアプリには影響しません）")) return;
+  setRoom(""); stopSync(); syncStatus = { text: "", ok: false };
+  renderSync();
 });
 $("appVersion").textContent = APP_VERSION;
 $("forceUpdate").addEventListener("click", () => { location.replace(location.pathname + "?v=" + Date.now()); });
@@ -663,6 +768,8 @@ addEventListener("orientationchange", () => setTimeout(measureTopbar, 300));
 renderKeyStatus();
 render();
 checkHash();
+renderSync();
+connectSync();
 
 // 公開中の最新版と違えば、自動で読み込み直す（Safariが古いページを覚えていることがあるため）
 (async () => {

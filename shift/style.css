@@ -242,3 +242,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 .color-field[hidden] { display: none; }
 .color-field input { height: 44px; padding: 4px; }
+
+.sync-state { font-weight: 600; color: var(--muted); }
+.sync-state.ok { color: var(--off); }
+.sync-line { font-size: .78rem; color: var(--muted); margin: 0 12px 6px; }
+.sync-line.ok { color: var(--off); }
+#syncRoom { font-size: .85rem; word-break: break-all; user-select: all; -webkit-user-select: all; }
