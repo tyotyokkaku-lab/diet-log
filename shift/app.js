@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17a";
+const APP_VERSION = "2026-11-17b";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -131,14 +131,14 @@ function renderUs() {
     inner: `<div class="half him">${chipHtml(getShift("him", date))}</div>
             <div class="gap"></div>
             <div class="half her">${chipHtml(getShift("her", date))}</div>
-            ${bothOff(date) ? `<span class="heart" aria-label="会えるかも？">♡</span>` : ""}`,
+            ${bothOff(date) ? `<span class="heart" aria-label="2人とも休み">♡</span>` : ""}`,
   }));
   const days = monthDays(cur.y, cur.m).filter((d) => d && bothOff(d));
   const today = todayStr();
   $("maybeList").innerHTML = days.length
     ? days.map((d) => `<button type="button" class="maybe-row ${d < today ? "past" : ""}" data-date="${d}">
-        <b>${dateLabel(d)}</b><span>ふたりとも休み → 会えるかも？</span></button>`).join("")
-    : `<p class="empty">${cur.m}月はまだ「ふたりとも休み」の日がありません</p>`;
+        <b>${dateLabel(d)}</b><span>2人とも休み</span></button>`).join("")
+    : `<p class="empty">${cur.m}月はまだ「2人とも休み」の日がありません</p>`;
 }
 
 function renderNames() {
