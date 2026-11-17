@@ -14,9 +14,10 @@ const STORE_KEY = "dietlog.v1";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
-  goal: { kcal: 2000, p: 20, f: 25, c: 55 },
+  goal: { kcal: 2000, p: 24, f: 22.5, c: 53.5 }, // P120g / F50g / C約267g
   entries: [], // {id,date,meal,name,qty,kcal,p,f,c,source,createdAt}  ※kcal〜cは1人前あたり
   dict: {}, // key -> {name,kcal,p,f,c,source,count,updatedAt}
+  pastDays: {}, // date -> {kcal,p,f,c,note}  エクセルから取り込んだ日別合計（null=未記録）
 });
 
 function load() {
@@ -78,7 +79,14 @@ function goalGrams(g = state.goal) {
     c: (g.kcal * g.c) / 100 / 4,
   };
 }
+function hasEntries(date) {
+  return state.entries.some((e) => e.date === date);
+}
 function totalsFor(date) {
+  if (!hasEntries(date) && state.pastDays[date]) {
+    const d = state.pastDays[date];
+    return { kcal: d.kcal, p: d.p, f: d.f, c: d.c, past: true, note: d.note };
+  }
   const t = { kcal: 0, p: 0, f: 0, c: 0 };
   for (const e of state.entries) {
     if (e.date !== date) continue;
@@ -102,7 +110,8 @@ let candidates = null; // {items:[...], source, note}
 // ---------- 今日の画面 ----------
 function renderSummary() {
   const g = goalGrams();
-  const t = totalsFor(currentDate);
+  const t0 = totalsFor(currentDate);
+  const t = { kcal: t0.kcal ?? 0, p: t0.p ?? 0, f: t0.f ?? 0, c: t0.c ?? 0 };
   const remain = g.kcal - t.kcal;
   const pct = (v, max) => Math.min(100, max > 0 ? (v / max) * 100 : 0);
   const macro = (key, label, color) => {
@@ -120,7 +129,8 @@ function renderSummary() {
     <div class="bar"><i style="width:${pct(t.kcal, g.kcal)}%;background:${remain < 0 ? "var(--over)" : "var(--kcal)"}"></i></div>
     ${macro("p", "P たんぱく質", "var(--p)")}
     ${macro("f", "F 脂質", "var(--f)")}
-    ${macro("c", "C 炭水化物", "var(--c)")}`;
+    ${macro("c", "C 炭水化物", "var(--c)")}
+    ${t0.past ? `<p class="note">この日はエクセルから取り込んだ合計です${t0.note ? `（${esc(t0.note)}）` : ""}。空欄の項目は0として表示しています。</p>` : ""}`;
 }
 
 function renderMealTabs() {
@@ -369,17 +379,42 @@ $("editDialog").addEventListener("close", () => {
 });
 
 // ---------- 履歴 ----------
+const fmt = (v, unit = "") => (v == null ? "—" : r0(v) + unit);
+function averages(dates) {
+  const sum = { kcal: [0, 0], p: [0, 0], f: [0, 0], c: [0, 0] };
+  for (const d of dates) {
+    const t = totalsFor(d);
+    for (const k of Object.keys(sum)) if (t[k] != null) { sum[k][0] += t[k]; sum[k][1]++; }
+  }
+  return Object.fromEntries(Object.entries(sum).map(([k, [v, n]]) => [k, n ? v / n : null]));
+}
+function avgBlock(title, dates) {
+  const days = dates.filter((d) => totalsFor(d).kcal != null);
+  if (!days.length) return "";
+  const a = averages(days), g = goalGrams();
+  const cell = (k, label, unit) => {
+    if (a[k] == null) return `<div>${label}<br><b>—</b></div>`;
+    const pc = (a[k] / g[k]) * 100;
+    return `<div>${label}<br><b>${r0(a[k])}${unit}</b><br><small class="${pc > 105 ? "over" : pc < 90 ? "under" : ""}">${r0(pc)}%</small></div>`;
+  };
+  return `<div class="avg"><div class="hint" style="margin:0 0 4px">${title}（${days.length}日分の平均・目標比）</div>
+    <div class="avg-grid">${cell("kcal", "kcal", "")}${cell("p", "P", "g")}${cell("f", "F", "g")}${cell("c", "C", "g")}</div></div>`;
+}
 function renderHistory() {
-  const dates = [...new Set(state.entries.map((e) => e.date))].sort().reverse();
-  if (!dates.length) { $("historyList").innerHTML = `<p class="empty">まだ記録がありません</p>`; return; }
+  const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays)])].sort().reverse();
+  if (!dates.length) { $("historyList").innerHTML = `<p class="empty">まだ記録がありません</p>`; $("historyAvg").innerHTML = ""; return; }
+  const t = todayStr();
+  const within = (n) => dates.filter((d) => d < t && d >= shiftDate(t, -n));
+  $("historyAvg").innerHTML = avgBlock("直近7日", within(7)) + avgBlock("直近30日", within(30));
   const g = goalGrams();
   $("historyList").innerHTML = dates.map((d) => {
-    const t = totalsFor(d);
-    const diff = t.kcal - g.kcal;
+    const x = totalsFor(d);
+    const diff = x.kcal == null ? null : x.kcal - g.kcal;
     return `<div class="hist-row"><button data-date="${d}">
-        <b>${dateLabel(d)}</b><br><small class="hint">P ${r0(t.p)} / F ${r0(t.f)} / C ${r0(t.c)} g</small></button>
-      <div style="text-align:right"><b>${r0(t.kcal)} kcal</b><br>
-        <span class="diff ${diff > 0 ? "over" : ""}">${diff > 0 ? "+" : ""}${r0(diff)}</span></div></div>`;
+        <b>${dateLabel(d)}</b>${x.past ? `<span class="badge">取込</span>` : ""}<br>
+        <small class="hint">P ${fmt(x.p)} / F ${fmt(x.f)} / C ${fmt(x.c)} g</small></button>
+      <div style="text-align:right"><b>${fmt(x.kcal, " kcal")}</b><br>
+        <span class="diff ${diff > 0 ? "over" : ""}">${diff == null ? "" : (diff > 0 ? "+" : "") + r0(diff)}</span></div></div>`;
   }).join("");
 }
 
@@ -395,7 +430,7 @@ function renderSettings() {
 }
 function updateGoalPreview() {
   const g = { kcal: num($("goalKcal").value), p: num($("goalP").value), f: num($("goalF").value), c: num($("goalC").value) };
-  const sum = g.p + g.f + g.c;
+  const sum = r1(g.p + g.f + g.c);
   const gg = goalGrams(g);
   $("goalPreview").innerHTML = `P ${r0(gg.p)}g / F ${r0(gg.f)}g / C ${r0(gg.c)}g` +
     (sum !== 100 ? `<br><span class="error">比率の合計が ${sum}% です（100%にしてください）</span>` : "");
@@ -496,7 +531,7 @@ $("historyList").addEventListener("click", (e) => {
 $("goalForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const g = { kcal: num($("goalKcal").value), p: num($("goalP").value), f: num($("goalF").value), c: num($("goalC").value) };
-  if (g.p + g.f + g.c !== 100) { alert("PFCの比率の合計を100%にしてください。"); return; }
+  if (Math.abs(g.p + g.f + g.c - 100) > 0.01) { alert("PFCの比率の合計を100%にしてください。"); return; }
   if (g.kcal < 800) { alert("目標カロリーを確認してください。"); return; }
   state.goal = g;
   save();
@@ -527,6 +562,66 @@ $("dictTable").addEventListener("click", (e) => {
 });
 
 $("exportCsv").addEventListener("click", exportCsv);
+
+function parseCsv(text) {
+  const rows = []; let row = [], cur = "", q = false;
+  text = text.replace(/^\ufeff/, "");
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(cur); cur = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cur); rows.push(row); row = []; cur = "";
+    } else cur += ch;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim()));
+}
+// エクセルの日別合計CSV（日付, 摂取カロリー(kcal), たんぱく質(g), 脂質(g), 炭水化物(g), …, メモ）を取り込む
+function importDailyCsv(text) {
+  const [head, ...rows] = parseCsv(text);
+  const col = (re) => head.findIndex((h) => re.test(h.trim()));
+  const iDate = col(/^日付/), iK = col(/カロリー\(kcal\)|^摂取カロリー/), iP = col(/^たんぱく質/), iF = col(/^脂質/), iC = col(/^炭水化物/);
+  const iPlo = col(/^P下限/), iPhi = col(/^P上限/), iMemo = col(/^メモ/);
+  if (iDate < 0 || iK < 0) throw new Error("「日付」「摂取カロリー(kcal)」の列が見つかりません");
+  const val = (r, i) => { if (i < 0) return null; const n = parseFloat(r[i]); return Number.isFinite(n) ? n : null; };
+  let n = 0;
+  for (const r of rows) {
+    const date = (r[iDate] || "").trim().replace(/\//g, "-");
+    if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(date)) continue;
+    const kcal = val(r, iK);
+    if (kcal == null) continue; // 合計がない日は取り込まない
+    let p = val(r, iP);
+    const notes = [];
+    if (p == null && val(r, iPlo) != null && val(r, iPhi) != null) {
+      p = (val(r, iPlo) + val(r, iPhi)) / 2; // 範囲しかない日は中間値
+      notes.push(`Pは${val(r, iPlo)}〜${val(r, iPhi)}gの中間値`);
+    }
+    if (iMemo >= 0 && r[iMemo]) notes.push(r[iMemo].trim());
+    const [y, m, d] = date.split("-").map(Number);
+    state.pastDays[todayStr(new Date(y, m - 1, d))] = { kcal, p, f: val(r, iF), c: val(r, iC), note: notes.join("。") };
+    n++;
+  }
+  return n;
+}
+$("importCsv").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const n = importDailyCsv(await file.text());
+    save();
+    alert(`${n}日分を取り込みました。「履歴」で見られます。`);
+  } catch (err) {
+    alert("読み込めませんでした：" + err.message);
+  } finally {
+    e.target.value = "";
+  }
+});
 $("exportJson").addEventListener("click", () =>
   download(`食事ログ_バックアップ_${todayStr()}.json`, JSON.stringify(state, null, 1), "application/json"));
 $("importJson").addEventListener("change", async (e) => {
@@ -534,7 +629,7 @@ $("importJson").addEventListener("change", async (e) => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    if (!Array.isArray(data.entries) || typeof data.dict !== "object") throw new Error("形式が違います");
+    if (!Array.isArray(data.entries) || typeof data.dict !== "object" || !data.dict) throw new Error("形式が違います");
     if (!confirm(`記録 ${data.entries.length} 件で、今のデータを置き換えます。よろしいですか？`)) return;
     state = { ...defaultState(), ...data };
     save();
