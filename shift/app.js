@@ -5,7 +5,7 @@ const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17e";
+const APP_VERSION = "2026-11-17f";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
