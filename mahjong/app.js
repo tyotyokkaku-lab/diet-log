@@ -1,6 +1,6 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
-const APP_VERSION = "2026-11-18a";
+const APP_VERSION = "2026-11-18b";
 
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)
@@ -383,6 +383,7 @@ $("checkKey").onclick=async()=>{
 renderKeyStatus();
 
 $("appVersion").textContent = APP_VERSION;
+$("appVersionFoot").textContent = APP_VERSION;
 $("forceUpdate").onclick = () => { location.replace(location.pathname + "?v=" + Date.now()); };
 
 // 公開中の最新版と違えば、自動で読み込み直す（Safariが古いページを覚えていることがあるため）
