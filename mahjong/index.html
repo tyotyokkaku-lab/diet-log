@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>麻雀 待ち牌判定</title>
+  <meta name="theme-color" content="#1f4d34">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="待ち牌判定">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Yuji+Syuku&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="style.css?v=2026-11-18f">
+</head>
+<body>
+
+<header><div class="wrap">
+  <h1>麻雀 待ち牌判定</h1>
+</div></header>
+
+<main><div class="wrap">
+
+<section aria-labelledby="h-hand">
+  <div class="head">
+    <div class="head-l">
+      <h2 id="h-hand">手牌</h2>
+      <button class="btn sm" id="sort">並び替え</button>
+      <button class="btn sm" id="clear">消す</button>
+    </div>
+    <span class="count"><b id="cnt">0</b>枚 <span id="sample-tag" class="tag" hidden>例</span></span>
+  </div>
+  <div id="hand" class="hand" aria-live="polite"></div>
+  <p class="hint">押した順に並びます。手牌の牌をタップすると外せます。</p>
+</section>
+
+<section aria-labelledby="h-res">
+  <div class="head"><h2 id="h-res">待ち牌</h2></div>
+  <div id="result" class="result" aria-live="polite"></div>
+</section>
+
+<section aria-labelledby="h-pal">
+  <div class="head"><h2 id="h-pal">牌を選ぶ</h2><span class="count">同じ牌は4枚まで</span></div>
+  <div id="pal" class="pal"></div>
+</section>
+
+<section aria-labelledby="h-photo">
+  <div class="head"><h2 id="h-photo">写真から読み取る</h2></div>
+  <div class="photo">
+    <div class="row">
+      <button class="btn primary" id="cam-btn">カメラで撮る</button>
+      <button class="btn" id="lib-btn">写真を選ぶ</button>
+      <input type="file" id="cam" accept="image/*" capture="environment">
+      <input type="file" id="lib" accept="image/*">
+    </div>
+    <div class="photo-body">
+      <img id="preview" class="preview" alt="読み取った写真" hidden>
+      <p id="pstatus" class="status">牌を横一列に並べ、真上か正面から明るく撮ると読み取りやすくなります。読み取った牌は手牌に並ぶので、違っていたらタップで直してください。</p>
+    </div>
+  </div>
+</section>
+
+
+<details class="settings" id="settings">
+  <summary>設定（写真の読み取り用 APIキー）</summary>
+  <div class="body">
+    <p class="hint">写真の読み取りに Claude の APIキーを使います。このスマホの中にだけ保存されます。食事ログやシフトに入れたキーがあればそれを使います。</p>
+    <p class="hint">いまの状態：<b id="keyStatus">未設定</b></p>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+    <div class="row">
+      <button class="btn primary" id="saveKey">保存する</button>
+      <button class="btn" id="checkKey" hidden>キーが使えるか確認する</button>
+      <button class="btn" id="delKey" hidden>キーを消す</button>
+    </div>
+    <p id="keyMsg" aria-live="polite"></p>
+    <p class="hint">アプリのバージョン：<span id="appVersion"></span></p>
+    <div class="row"><button class="btn" id="forceUpdate">最新版に更新する</button></div>
+  </div>
+</details>
+
+<footer>リーチ麻雀（13枚）の通常形・七対子・国士無双に対応。手牌で4枚使っている牌は待ちになりません（残り0枚と表示）。<br>バージョン：<span id="appVersionFoot"></span></footer>
+</div></main>
+
+<script type="module" src="app.js?v=2026-11-18f"></script>
+</body>
+</html>
