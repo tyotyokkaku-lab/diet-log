@@ -1,6 +1,6 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
-const APP_VERSION = "2026-11-18d";
+const APP_VERSION = "2026-11-18e";
 
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)
@@ -413,7 +413,7 @@ async function handleFile(input){
     if(res.note) msg+=` メモ: ${String(res.note).slice(0,140)}`;
     msg+=" 間違いがあれば手牌をタップして直してください。";
     setStatus(msg);
-    $("h-hand").scrollIntoView({behavior:"smooth",block:"start"});
+    $("h-hand").closest("section").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     setStatus(e.message||"読み取りに失敗しました。もう一度お試しください。",true);
   }finally{
