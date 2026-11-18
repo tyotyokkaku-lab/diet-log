@@ -122,7 +122,9 @@ input, select {
 @media (prefers-color-scheme: dark) { .badge.ai { background: #3d3018; color: #f0c56a; } }
 .cand-item { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .cand-item:last-of-type { border-bottom: none; }
-.cand-item .name-input { margin-bottom: 6px; }
+.cand-item .name-input { margin-bottom: 0; flex: 1; min-width: 0; }
+.cand-name-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.cand-rm { flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; font-size: 1.2rem; line-height: 1; color: var(--muted); }
 .row.four .field input { padding: 8px 6px; }
 .note { font-size: .82rem; color: var(--muted); margin: 6px 0; }
 .error { color: var(--danger); font-size: .9rem; margin-top: 8px; }

@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-17g";
+const APP_VERSION = "2026-11-18a";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -172,7 +172,10 @@ function renderCandidate(extra = "") {
     ${candidates.photoUrls?.length ? `<div class="thumbs">${candidates.photoUrls.map((u) => `<img src="${u}" alt="送った写真">`).join("")}</div>` : ""}
     <p class="note">数値は「1人前」あたりです。違っていたら直してから記録してください。</p>
     ${items.map((it, i) => `<div class="cand-item" data-i="${i}">
-      <input class="name-input" data-k="name" value="${esc(it.name)}">
+      <div class="cand-name-row">
+        <input class="name-input" data-k="name" value="${esc(it.name)}">
+        ${items.length > 1 ? `<button type="button" class="cand-rm" data-rm-item="${i}" aria-label="${esc(it.name)}を記録しない">×</button>` : ""}
+      </div>
       <div class="row four">
         <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${r0(it.kcal)}"></label>
         <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${r1(it.p)}"></label>
@@ -185,7 +188,7 @@ function renderCandidate(extra = "") {
     <div class="row">
       <button type="button" id="candCancel">やめる</button>
       ${source === "dict" ? `<button type="button" id="candAI">AIで計算し直す</button>` : ""}
-      <button type="button" class="primary" id="candSave">記録する</button>
+      <button type="button" class="primary" id="candSave">${items.length > 1 ? `${items.length}品を記録する` : "記録する"}</button>
     </div>${extra}</div>`;
 }
 
@@ -691,6 +694,13 @@ $("photoTray").addEventListener("click", (e) => {
 
 $("candidate").addEventListener("click", (e) => {
   const id = e.target.id;
+  const rmItem = e.target.closest("button[data-rm-item]");
+  if (rmItem) {
+    readCandidateInputs(); // 直した数値を残したまま1品だけ外す
+    candidates.items.splice(+rmItem.dataset.rmItem, 1);
+    renderCandidate();
+    return;
+  }
   if (id === "candCancel") { candidates = null; renderCandidate(); }
   if (id === "candSave") saveCandidates();
   if (id === "candAI") { calculate($("foodInput").value.trim(), num($("qtyInput").value) || 1, true); }
