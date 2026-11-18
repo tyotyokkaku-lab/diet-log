@@ -1,5 +1,7 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
+const APP_VERSION = "2026-11-18a";
+
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)
 const NAMES = [];
@@ -379,4 +381,19 @@ $("checkKey").onclick=async()=>{
   }finally{ b.disabled=false; b.textContent="キーが使えるか確認する"; }
 };
 renderKeyStatus();
+
+$("appVersion").textContent = APP_VERSION;
+$("forceUpdate").onclick = () => { location.replace(location.pathname + "?v=" + Date.now()); };
+
+// 公開中の最新版と違えば、自動で読み込み直す（Safariが古いページを覚えていることがあるため）
+(async () => {
+  try {
+    const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
+    const v = (await r.text()).trim();
+    if (r.ok && v && v !== APP_VERSION && !sessionStorage.getItem("mahjong.reloaded." + v)) {
+      sessionStorage.setItem("mahjong.reloaded." + v, "1");
+      location.replace(location.pathname + "?v=" + Date.now());
+    }
+  } catch {}
+})();
 })();
