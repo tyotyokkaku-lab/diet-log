@@ -1,6 +1,6 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
-const APP_VERSION = "2026-11-18b";
+const APP_VERSION = "2026-11-18c";
 
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)
@@ -138,16 +138,16 @@ function removeAt(i){
 function render(){
   // hand (in tap order; ソート sorts it)
   const s=hand, H=$("hand"); H.innerHTML="";
-  const slots=s.length>=14?14:13;
-  H.style.gridTemplateColumns=`repeat(${slots},1fr)`;
+  const slots=14;
   for(let i=0;i<slots;i++){
     if(i<s.length){
       const b=document.createElement("button"); b.className="t"; b.innerHTML=tileSVG(s[i]);
       b.setAttribute("aria-label",NAMES[s[i]]+"を外す");
       if(lastAdded!==null&&i===s.length-1) b.classList.add("new");
+      if(i===13) b.classList.add("tsumo");
       b.onclick=()=>removeAt(i); H.appendChild(b);
     } else {
-      const d=document.createElement("div"); d.className="slot"; d.textContent=i+1; H.appendChild(d);
+      const d=document.createElement("div"); d.className="slot"+(i===13?" tsumo":""); d.textContent=i+1; H.appendChild(d);
     }
   }
   $("cnt").textContent=hand.length;
@@ -174,46 +174,60 @@ function renderResult(){
   }
   if(n===14){
     const sh=winShape(counts(hand));
-    if(sh){p("verdict win",`和了形（${sh.kind}）`);R.appendChild(shapeEl(sh));return;}
+    if(sh){p("verdict win",`あがっています（${sh.kind}）`);R.appendChild(shapeEl(sh));return;}
     const cuts=[]; const seen=new Set();
     for(const t of sorted()){ if(seen.has(t))continue; seen.add(t);
       const rest=hand.slice(); rest.splice(rest.indexOf(t),1);
-      const w=waitsFor(rest); if(w.length) cuts.push({t,w});
+      const w=waitsFor(rest); if(w.length) cuts.push({t,w,total:w.reduce((a,x)=>a+x.left,0)});
     }
-    if(!cuts.length){p("verdict no","14枚：どれを切ってもノーテン");p("hint","13枚にすると待ち牌を表示します。手牌の牌をタップで外せます。");return;}
-    p("verdict ok","14枚：これを切るとテンパイ");
+    if(!cuts.length){p("verdict no","あがっていません・どれを切ってもテンパイになりません");return;}
+    cuts.sort((x,y)=>y.total-x.total||y.w.length-x.w.length||x.t-y.t);
+    p("verdict ok","あがっていません・これを切るとテンパイ");
     const box=document.createElement("div");box.className="cuts";
-    cuts.forEach(({t,w})=>{
+    cuts.forEach(({t,w,total})=>{
       const row=document.createElement("div");row.className="cut";
-      const total=w.reduce((a,x)=>a+x.left,0);
-      row.innerHTML=`<span class="lbl"><span class="mini">${tileSVG(t)}</span>切り →</span><span class="mini">${w.map(x=>tileSVG(x.t)).join("")}</span><span class="lbl">${w.length}種 ${total}枚</span>`;
-      const b=document.createElement("button");b.className="btn";b.textContent="これを切る";
-      b.onclick=()=>{hand.splice(hand.indexOf(t),1);isSample=false;save();render();};
-      row.appendChild(b); box.appendChild(row);
+      const b=document.createElement("button");b.className="t cut-tile";b.innerHTML=tileSVG(t);
+      b.setAttribute("aria-label",NAMES[t]+"を切る");
+      b.onclick=()=>{hand.splice(hand.lastIndexOf(t),1);isSample=false;lastAdded=null;selWait=null;save();render();};
+      const lbl=document.createElement("span");lbl.className="cut-lbl";lbl.innerHTML=`切り<br>${w.length}種${total}枚`;
+      row.append(b,lbl,waitRow(w,false));
+      box.appendChild(row);
     });
-    R.appendChild(box); return;
+    R.appendChild(box);
+    p("hint","切る牌をタップすると、その牌を手牌から外します。");
+    return;
   }
   // 13 tiles
   const w=waitsFor(hand);
-  if(!w.length){p("verdict no","ノーテン（待ちなし）");p("hint","この13枚ではあがれる牌がありません。");return;}
+  if(!w.length){p("verdict no","ノーテン（待ちなし）");return;}
   const live=w.filter(x=>x.left>0), total=live.reduce((a,x)=>a+x.left,0);
   p("verdict ok",`テンパイ　${w.length}種 ・ 残り${total}枚`);
   if(!live.length) p("hint","待ち牌はすべて手牌で4枚使っています（純カラ）。");
   const wb=document.createElement("div");wb.className="waitbox";
   wb.innerHTML=`<span class="wl">待ち</span>`;
-  const box=document.createElement("div");box.className="waits";wb.appendChild(box);
-  w.forEach(x=>{
-    const d=document.createElement("div");d.className="wait"+(x.left?"":" dead")+(selWait===x.t?" sel":"");
-    const b=document.createElement("button");b.className="t";b.innerHTML=tileSVG(x.t);
-    b.setAttribute("aria-label",`${NAMES[x.t]}で和了したときの形を見る`);
-    b.onclick=()=>{selWait=selWait===x.t?null:x.t;renderResult();};
-    const l=document.createElement("span");l.className="left";l.textContent=`残り${x.left}枚`;
-    d.append(b,l);box.appendChild(d);
-  });
+  wb.appendChild(waitRow(w,true));
   R.appendChild(wb);
   const sel=w.find(x=>x.t===selWait);
   if(sel){p("shape-label",`${NAMES[sel.t]}であがったときの形（${sel.shape.kind}）`);R.appendChild(shapeEl(sel.shape));}
   else p("hint","待ち牌をタップすると、あがったときの形を表示します。");
+}
+// 待ち牌を1行に並べる（多いときは牌の間を詰めて小さくする）
+function waitRow(w,tappable){
+  const box=document.createElement("div");box.className="waits";
+  const many=w.length>=7;
+  box.style.gridTemplateColumns=`repeat(${w.length},minmax(0,${tappable?40:32}px))`;
+  box.style.gap=many?"2px":"6px";
+  w.forEach(x=>{
+    const d=document.createElement("div");d.className="wait"+(x.left?"":" dead")+(tappable&&selWait===x.t?" sel":"");
+    const tile=document.createElement(tappable?"button":"div");tile.className="t";tile.innerHTML=tileSVG(x.t);
+    if(tappable){
+      tile.setAttribute("aria-label",`${NAMES[x.t]}で和了したときの形を見る`);
+      tile.onclick=()=>{selWait=selWait===x.t?null:x.t;renderResult();};
+    }
+    const l=document.createElement("span");l.className="left";l.textContent=many?`${x.left}枚`:`残り${x.left}枚`;
+    d.append(tile,l);box.appendChild(d);
+  });
+  return box;
 }
 function shapeEl(sh){
   const d=document.createElement("div");d.className="shape";
@@ -334,7 +348,7 @@ async function handleFile(input){
     hand=kept; isSample=false; lastAdded=null; selWait=null; save(); render();
     let msg=`${ids.length}枚読み取りました。`;
     if(kept.length<13) msg+=`あと${13-kept.length}枚を牌のボタンで足してください。`;
-    if(kept.length===14) msg+="14枚なので、切るとテンパイになる牌を表示しています。";
+    if(kept.length===14) msg+="14枚なので、あがりか、どれを切るとテンパイになるかを表示しています。";
     if(dropped) msg+=`（多すぎた${dropped}枚は外しました）`;
     if(unknown.length) msg+=`（読めなかった牌: ${unknown.length}枚）`;
     if(res.note) msg+=` メモ: ${String(res.note).slice(0,140)}`;
