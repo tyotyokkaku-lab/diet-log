@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18a";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18b";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-18a";
+const APP_VERSION = "2026-11-18b";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -457,7 +457,7 @@ function ocrPrompt(who, hint) {
 読み取れる日ごとの予定を entries に入れてください。
 
 - 今日は ${todayStr()}、アプリで今表示している月は ${cur.y}年${cur.m}月 です。画像に年や月が書かれていなければ、表示中の月かその近くとして解釈してください。
-- type：仕事・出勤・シフト勤務は "work"。休み・公休・有給・希望休・「休」「×」「OFF」「/」などは "off"。仕事以外の予定（遊び・用事など）は "plan"。
+- type：仕事・出勤・シフト勤務は "work"。「明け」（夜勤明け）も仕事のシフトとして "work" にしてください。休み・公休・有給・希望休・「休」「×」「OFF」「/」などは "off"。仕事以外の予定（遊び・用事など）は "plan"。
 - シフト表で複数人が並んでいる場合は「${nm(who)}」本人の行・列だけを読んでください。どれが本人か判断できない場合は、note にそう書いてください。
 - シフト表で、空欄が明らかに「休み」を意味している場合は "off" にしてください。カレンダーで単に何も書かれていない日は出力しないでください。
 - 時刻は24時間表記の HH:MM（例 "09:00"、"22:30"）。「9-18」なら start "09:00" end "18:00"。日をまたぐ場合も end はそのまま（例 "02:00"）。
@@ -505,7 +505,7 @@ async function readShots(who, hint) {
   const okTime = (t) => (/^\d{1,2}:\d{2}$/.test(t) ? t.padStart(5, "0") : "");
   const entries = (data.entries || [])
     .filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date) && !isNaN(parseDate(e.date)))
-    .map((e) => ({ date: e.date, type: e.type, label: e.label || "", start: okTime(e.start), end: okTime(e.end), color: isHex(e.color) ? e.color.toLowerCase() : "", on: true }))
+    .map((e) => ({ date: e.date, type: e.type === "off" && isWorkLabel(e.label) ? "work" : e.type, label: e.label || "", start: okTime(e.start), end: okTime(e.end), color: isHex(e.color) ? e.color.toLowerCase() : "", on: true }))
     .sort((a, b) => a.date.localeCompare(b.date));
   // 同じ日が重複したら後のものを使う
   const byDate = new Map(entries.map((e) => [e.date, e]));
@@ -546,7 +546,8 @@ $("ocrResult").addEventListener("click", (ev) => {
   const picked = ocr.entries.filter((e) => e.on);
   for (const e of picked) {
     setShift(ocr.who, e.date, { ...e, note: "" });
-    if (e.label && e.type !== "off" && e.color) state.labelColors[e.label] = e.color; // 元のアプリの色を引き継ぐ
+    // 元のアプリの色を引き継ぐ。ただし一度決まったシフト名の色は変えない（同じ名前は同じ色に固定）
+    if (e.label && e.type !== "off" && e.color && !isHex(state.labelColors[e.label]) && !PRESET_COLORS[e.label] && !FIXED_COLORS[e.label]) state.labelColors[e.label] = e.color;
     if (e.type === "work") ensureType(ocr.who, e.label, e.start, e.end);
   }
   save();
@@ -574,6 +575,27 @@ $("ocrBtn").addEventListener("click", async () => {
     btn.disabled = !shots.length;
   }
 });
+
+// 一度シフト（仕事）として使った名前か（休みの言葉は除く）
+function isWorkLabel(label) {
+  if (!label || OFF_WORD.test(label)) return false;
+  if (FIXED_COLORS[label] || PRESET_COLORS[label]) return true;
+  return PEOPLE.some((p) => state.types[p][label] && !state.types[p][label].del);
+}
+// 休みとして入ってしまったシフト名（例：明け）を仕事に直す。同じ名前はいつも同じ見た目にするため
+function fixOffLabels() {
+  let changed = false;
+  const now = Date.now();
+  for (const p of PEOPLE) {
+    for (const [date, e] of Object.entries(state.shifts[p])) {
+      if (e.type === "off" && isWorkLabel(e.label)) {
+        state.shifts[p][date] = { ...e, type: "work", u: now };
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
 
 // ---------- シフトの種類（名前・色・時間） ----------
 let typeEditing = null; // { who, label }
@@ -723,6 +745,7 @@ function applyRemote(data) {
     if (/^#[0-9a-f]{6}$/i.test(c)) state.labelColors[label] = c;
   }
   for (const p of PEOPLE) typesFromShifts(p);
+  fixOffLabels();
   saveLocal();
   pushDiff(state, PEOPLE); // こちらにしかない・こちらの方が新しいものを送る
   for (const p of PEOPLE) $(p === "him" ? "nameHim" : "nameHer").value = state.names[p];
@@ -789,6 +812,7 @@ measureTopbar();
 addEventListener("resize", measureTopbar);
 addEventListener("orientationchange", () => setTimeout(measureTopbar, 300));
 
+if (fixOffLabels()) save();
 renderKeyStatus();
 render();
 renderSync();
