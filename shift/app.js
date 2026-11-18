@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-17w";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18a";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-17w";
+const APP_VERSION = "2026-11-18a";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -648,14 +648,40 @@ for (const p of PEOPLE) {
 function renderKeyStatus() {
   let own = "", diet = "";
   try { own = localStorage.getItem(KEY_KEY) || ""; diet = localStorage.getItem(DIET_KEY_KEY) || ""; } catch {}
-  $("keyStatus").textContent = own ? "設定済み" : diet ? "食事ログのキーを使います" : "未設定";
+  // 最後の4文字を出して、Claude Console のキー一覧と見比べられるようにする
+  $("keyStatus").textContent = own ? `設定済み（最後の4文字：${own.slice(-4)}）` : diet ? "食事ログのキーを使います" : "未設定";
+  $("checkKey").hidden = !getKey();
 }
 $("saveKey").addEventListener("click", () => {
-  setKey($("apiKey").value.trim());
+  // 貼り付けで混ざりやすい空白・改行・見えない文字を取り除く
+  const v = $("apiKey").value.replace(/[\s\u200b-\u200d\ufeff]/g, "");
+  if (!v) return;
+  if (!/^sk-ant-[A-Za-z0-9_-]{80,}$/.test(v)) {
+    alert(v.includes("...") || v.includes("…")
+      ? "一覧に表示されている省略されたキー（…が入ったもの）はコピーしても使えません。新しくキーを作って、作った直後に表示されるキーを全部コピーしてください。"
+      : "APIキーの形ではないようです（途中で切れているかもしれません）。sk-ant- で始まる長いキーを全部コピーして貼り付けてください。");
+    return;
+  }
+  setKey(v);
   $("apiKey").value = "";
   renderKeyStatus();
+  $("checkKey").click();
 });
-
+$("checkKey").addEventListener("click", async () => {
+  const btn = $("checkKey");
+  btn.disabled = true; btn.textContent = "確認中…";
+  try {
+    const client = new Anthropic({ apiKey: getKey(), dangerouslyAllowBrowser: true });
+    await client.models.list({ limit: 1 }); // 料金のかからない呼び出しでキーを確かめる
+    alert("このAPIキーは使えます。");
+  } catch (e) {
+    alert(e instanceof Anthropic.AuthenticationError ? "このAPIキーは使えません（間違っているか、削除・無効化されたキーです）。"
+      : e instanceof Anthropic.APIConnectionError ? "通信できませんでした。電波の状態を確認してください。"
+      : "確認できませんでした：" + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "キーが使えるか確認する";
+  }
+});
 
 // ---------- 自動同期（Firebase） ----------
 const ROOM_KEY = "shiftcal.room";
