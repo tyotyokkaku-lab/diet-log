@@ -1,6 +1,6 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
-const APP_VERSION = "2026-11-18c";
+const APP_VERSION = "2026-11-18d";
 
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)
@@ -116,6 +116,42 @@ function waitsFor(h){ // 13 tiles
   return out;
 }
 
+// 向聴数（-1=和了、0=テンパイ）。通常形・七対子・国士無双の小さい方
+function stdShanten(c){
+  let best=8;
+  const rec=(i,m,t,p)=>{
+    while(i<34&&!c[i]) i++;
+    if(i>=34){const v=8-2*m-Math.min(t,4-m)-p; if(v<best) best=v; return;}
+    if(c[i]>=3){c[i]-=3;rec(i,m+1,t,p);c[i]+=3;}
+    const sq=i<27&&i%9<=6;
+    if(sq&&c[i+1]&&c[i+2]){c[i]--;c[i+1]--;c[i+2]--;rec(i,m+1,t,p);c[i]++;c[i+1]++;c[i+2]++;}
+    if(!p&&c[i]>=2){c[i]-=2;rec(i,m,t,1);c[i]+=2;}
+    if(m+t<4){
+      if(c[i]>=2){c[i]-=2;rec(i,m,t+1,p);c[i]+=2;}
+      if(i<27&&i%9<=7&&c[i+1]){c[i]--;c[i+1]--;rec(i,m,t+1,p);c[i]++;c[i+1]++;}
+      if(sq&&c[i+2]){c[i]--;c[i+2]--;rec(i,m,t+1,p);c[i]++;c[i+2]++;}
+    }
+    c[i]--;rec(i,m,t,p);c[i]++;
+  };
+  rec(0,0,0,0); return best;
+}
+function shanten(c){
+  let pairs=0,kinds=0; c.forEach(n=>{if(n){kinds++; if(n>=2)pairs++;}});
+  const chiitoi=6-pairs+Math.max(0,7-kinds);
+  let ok=0,op=0; ORPHANS.forEach(i=>{if(c[i]){ok++; if(c[i]>=2)op=1;}});
+  return Math.min(stdShanten(c),chiitoi,13-ok-op);
+}
+// 受入：来ると向聴数が進む牌（seenで見えている枚数を引く）
+function ukeire(c13,seen){
+  const s0=shanten(c13), out=[];
+  for(let t=0;t<34;t++){
+    const left=4-seen[t]; if(left<=0) continue;
+    c13[t]++; const s=shanten(c13); c13[t]--;
+    if(s<s0) out.push({t,left});
+  }
+  return {s:s0,tiles:out,total:out.reduce((a,x)=>a+x.left,0)};
+}
+
 // ---------- state
 let hand=[], lastAdded=null, isSample=false, selWait=null;
 const SAMPLE=[1,2,3,4,5, 11,12,13, 23,24,25, 26,26]; // 23456萬 345筒 678索 99索 → 1-4-7萬待ち
@@ -178,28 +214,41 @@ function renderResult(){
     const cuts=[]; const seen=new Set();
     for(const t of sorted()){ if(seen.has(t))continue; seen.add(t);
       const rest=hand.slice(); rest.splice(rest.indexOf(t),1);
-      const w=waitsFor(rest); if(w.length) cuts.push({t,w,total:w.reduce((a,x)=>a+x.left,0)});
+      const c14=counts(hand);
+      const w=waitsFor(rest).map(x=>({...x,left:4-c14[x.t]})); if(w.length) cuts.push({t,w,total:w.reduce((a,x)=>a+Math.max(0,x.left),0)});
     }
-    if(!cuts.length){p("verdict no","あがっていません・どれを切ってもテンパイになりません");return;}
+    if(!cuts.length){
+      const c14=counts(hand), opts=[];
+      for(const t of seen){ c14[t]--; const u=ukeire(c14.slice(),counts(hand)); c14[t]++; opts.push({t,...u}); }
+      const minS=Math.min(...opts.map(o=>o.s));
+      const best=opts.filter(o=>o.s===minS).sort((x,y)=>y.total-x.total||y.tiles.length-x.tiles.length||x.t-y.t);
+      p("verdict no",`あがっていません・${minS}向聴`);
+      p("hint","どれを切ってもテンパイになりません。受入枚数（来ると1歩テンパイに近づく牌の枚数）が多い順です。");
+      const box=document.createElement("div");box.className="cuts";
+      best.forEach(o=>box.appendChild(cutRow(o.t,`切り<br>受入${o.total}枚`,o.tiles)));
+      R.appendChild(box);
+      p("hint","切る牌をタップすると、その牌を手牌から外します。");
+      return;
+    }
     cuts.sort((x,y)=>y.total-x.total||y.w.length-x.w.length||x.t-y.t);
     p("verdict ok","あがっていません・これを切るとテンパイ");
     const box=document.createElement("div");box.className="cuts";
-    cuts.forEach(({t,w,total})=>{
-      const row=document.createElement("div");row.className="cut";
-      const b=document.createElement("button");b.className="t cut-tile";b.innerHTML=tileSVG(t);
-      b.setAttribute("aria-label",NAMES[t]+"を切る");
-      b.onclick=()=>{hand.splice(hand.lastIndexOf(t),1);isSample=false;lastAdded=null;selWait=null;save();render();};
-      const lbl=document.createElement("span");lbl.className="cut-lbl";lbl.innerHTML=`切り<br>${w.length}種${total}枚`;
-      row.append(b,lbl,waitRow(w,false));
-      box.appendChild(row);
-    });
+    cuts.forEach(({t,w,total})=>box.appendChild(cutRow(t,`切り<br>${w.length}種${total}枚`,w)));
     R.appendChild(box);
     p("hint","切る牌をタップすると、その牌を手牌から外します。");
     return;
   }
   // 13 tiles
   const w=waitsFor(hand);
-  if(!w.length){p("verdict no","ノーテン（待ちなし）");return;}
+  if(!w.length){
+    const c=counts(hand), u=ukeire(c.slice(),c);
+    p("verdict no",`ノーテン（${u.s}向聴）・受入${u.tiles.length}種${u.total}枚`);
+    const wb=document.createElement("div");wb.className="waitbox";
+    wb.innerHTML=`<span class="wl">受入</span>`; wb.appendChild(waitRow(u.tiles,false,9));
+    R.appendChild(wb);
+    p("hint","来ると1歩テンパイに近づく牌です。");
+    return;
+  }
   const live=w.filter(x=>x.left>0), total=live.reduce((a,x)=>a+x.left,0);
   p("verdict ok",`テンパイ　${w.length}種 ・ 残り${total}枚`);
   if(!live.length) p("hint","待ち牌はすべて手牌で4枚使っています（純カラ）。");
@@ -212,11 +261,21 @@ function renderResult(){
   else p("hint","待ち牌をタップすると、あがったときの形を表示します。");
 }
 // 待ち牌を1行に並べる（多いときは牌の間を詰めて小さくする）
-function waitRow(w,tappable){
+function cutRow(t,label,tiles){
+  const row=document.createElement("div");row.className="cut";
+  const b=document.createElement("button");b.className="t cut-tile";b.innerHTML=tileSVG(t);
+  b.setAttribute("aria-label",NAMES[t]+"を切る");
+  b.onclick=()=>{hand.splice(hand.lastIndexOf(t),1);isSample=false;lastAdded=null;selWait=null;save();render();};
+  const lbl=document.createElement("span");lbl.className="cut-lbl";lbl.innerHTML=label;
+  row.append(b,lbl,waitRow(tiles,false,9));
+  return row;
+}
+function waitRow(w,tappable,maxCols=34){
   const box=document.createElement("div");box.className="waits";
-  const many=w.length>=7;
-  box.style.gridTemplateColumns=`repeat(${w.length},minmax(0,${tappable?40:32}px))`;
-  box.style.gap=many?"2px":"6px";
+  const many=w.length>=7, cols=Math.min(w.length,maxCols);
+  box.style.gridTemplateColumns=`repeat(${cols},minmax(0,${tappable?40:32}px))`;
+  box.style.rowGap="4px";
+  box.style.columnGap=many?"2px":"6px";
   w.forEach(x=>{
     const d=document.createElement("div");d.className="wait"+(x.left?"":" dead")+(tappable&&selWait===x.t?" sel":"");
     const tile=document.createElement(tappable?"button":"div");tile.className="t";tile.innerHTML=tileSVG(x.t);
