@@ -1,6 +1,6 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
 
-const APP_VERSION = "2026-11-18e";
+const APP_VERSION = "2026-11-18f";
 
 (() => {
 // ---------- tile ids: 0-8 萬子, 9-17 筒子, 18-26 索子, 27-33 字牌(東南西北白發中)

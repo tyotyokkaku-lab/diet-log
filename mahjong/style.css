@@ -1,5 +1,6 @@
 [hidden]{display:none!important}
-html,body{touch-action:manipulation}
+html,body{touch-action:manipulation;overscroll-behavior:none}
+html{background:linear-gradient(var(--felt-deep) 50%,var(--bg) 50%)}
 body{margin:0}
 button,a,input,label{touch-action:manipulation}
 img{max-width:100%}
@@ -46,8 +47,8 @@ button.t{all:unset;cursor:pointer;display:block;border-radius:6px;transition:tra
 button.t:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 button.t:active{transform:translateY(2px)}
 button.t[disabled]{opacity:.32;cursor:not-allowed}
-.hand{display:grid;grid-template-columns:repeat(13,1fr) 1.15fr;gap:2px;max-width:660px}
-.hand .tsumo{margin-left:3px}
+.hand{display:grid;grid-template-columns:repeat(13,minmax(0,1fr)) minmax(0,1.15fr);gap:2px;max-width:660px}
+.hand .tsumo{justify-self:end;width:calc(100% - 3px)}
 .hand .slot.tsumo{border-color:var(--accent)}
 .hand .slot{aspect-ratio:60/84;border-radius:4px;border:1px dashed var(--muted);opacity:.55;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:clamp(9px,2.4vw,13px);font-variant-numeric:tabular-nums}
 .head-l{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
