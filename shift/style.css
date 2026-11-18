@@ -263,3 +263,10 @@ dialog .row .field { min-width: 0; }
 .chip b.fit4 { font-size: .62rem; letter-spacing: -.06em; text-overflow: clip; }
 .chip b.fit5 { font-size: .52rem; letter-spacing: -.07em; text-overflow: clip; }
 .chip b.fit6 { font-size: .52rem; letter-spacing: -.05em; white-space: normal; line-height: 1.1; word-break: break-all; overflow: visible; }
+
+/* スワイプで月を移動したときの軽い動き */
+@keyframes slideL { from { transform: translateX(40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes slideR { from { transform: translateX(-40px); opacity: .3; } to { transform: none; opacity: 1; } }
+.slide-l { animation: slideL .22s ease-out; }
+.slide-r { animation: slideR .22s ease-out; }
+#personCal, #usCal { touch-action: pan-y; }

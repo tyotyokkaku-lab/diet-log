@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18b";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18c";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-18b";
+const APP_VERSION = "2026-11-18c";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -656,6 +656,30 @@ document.querySelector(".tabbar").addEventListener("click", (ev) => {
 });
 $("prevMonth").addEventListener("click", () => { cur = cur.m === 1 ? { y: cur.y - 1, m: 12 } : { y: cur.y, m: cur.m - 1 }; render(); });
 $("nextMonth").addEventListener("click", () => { cur = cur.m === 12 ? { y: cur.y + 1, m: 1 } : { y: cur.y, m: cur.m + 1 }; render(); });
+// カレンダーを左右にスワイプして月を移動（左へ＝次の月、右へ＝前の月）
+let swipe = null;
+for (const id of ["personCal", "usCal"]) {
+  const el = $(id);
+  el.addEventListener("touchstart", (ev) => {
+    if (ev.touches.length !== 1) { swipe = null; return; }
+    const t = ev.touches[0];
+    swipe = { x: t.clientX, y: t.clientY, time: Date.now() };
+  }, { passive: true });
+  el.addEventListener("touchend", (ev) => {
+    if (!swipe) return;
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+    const fast = Date.now() - swipe.time < 800;
+    swipe = null;
+    // 横にはっきり動かしたときだけ（縦スクロールと区別する）
+    if (!fast || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const box = el;
+    $(dx < 0 ? "nextMonth" : "prevMonth").click();
+    box.classList.remove("slide-l", "slide-r");
+    void box.offsetWidth; // アニメーションをやり直すため
+    box.classList.add(dx < 0 ? "slide-l" : "slide-r");
+  }, { passive: true });
+}
 $("monthLabel").addEventListener("click", () => { const t = new Date(); cur = { y: t.getFullYear(), m: t.getMonth() + 1 }; render(); });
 
 for (const p of PEOPLE) {
