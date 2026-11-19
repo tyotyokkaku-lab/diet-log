@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-19a";
+const APP_VERSION = "2026-11-19b";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -643,11 +643,15 @@ function exportCsv() {
 function showView(name) {
   for (const v of ["today", "history", "settings"]) $("view-" + v).hidden = v !== name;
   document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
-  document.querySelector(".topbar").style.visibility = name === "today" ? "visible" : "hidden";
+  // 上のバーは常に表示。今日以外の画面では矢印を隠して画面名を出す
+  const isToday = name === "today";
+  $("prevDay").style.visibility = $("nextDay").style.visibility = isToday ? "visible" : "hidden";
+  $("dateLabel").disabled = !isToday;
+  if (!isToday) $("dateLabel").textContent = name === "history" ? "履歴" : "設定";
   if (name === "today") renderToday();
   if (name === "history") renderHistory();
   if (name === "settings") renderSettings();
-  window.scrollTo(0, 0);
+  document.querySelector("main").scrollTo(0, 0);
 }
 document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
