@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-18a";
+const APP_VERSION = "2026-11-19a";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -651,8 +651,42 @@ function showView(name) {
 }
 document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
-$("prevDay").addEventListener("click", () => { currentDate = shiftDate(currentDate, -1); renderToday(); });
-$("nextDay").addEventListener("click", () => { currentDate = shiftDate(currentDate, 1); renderToday(); });
+function goDay(delta) {
+  currentDate = shiftDate(currentDate, delta);
+  renderToday();
+  // どちらに動いたかわかるよう、少しだけ横から入ってくる動き
+  const v = $("view-today");
+  v.classList.remove("slide-l", "slide-r");
+  void v.offsetWidth;
+  v.classList.add(delta > 0 ? "slide-l" : "slide-r");
+}
+$("prevDay").addEventListener("click", () => goDay(-1));
+$("nextDay").addEventListener("click", () => goDay(1));
+
+// 左右スワイプで日付を移動（右へスワイプ＝前の日、左へスワイプ＝次の日）
+{
+  let sx = 0, sy = 0, st = 0, tracking = false;
+  const view = $("view-today");
+  view.addEventListener("touchstart", (e) => {
+    tracking = false;
+    if (e.touches.length !== 1) return;
+    // 入力欄や横に動かす要素の上では、スワイプとして扱わない
+    if (e.target.closest("input, textarea, select, .thumbs, dialog")) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    // 画面の左端からのスワイプはiPhoneの「戻る」操作とぶつかるので使わない
+    tracking = sx > 24;
+  }, { passive: true });
+  view.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Date.now() - st > 800) return; // ゆっくりした動きはスクロールとみなす
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 横方向にしっかり動いたときだけ
+    goDay(dx > 0 ? -1 : 1);
+  }, { passive: true });
+  view.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+}
 $("dateLabel").addEventListener("click", () => {
   const p = $("datePicker");
   if (p.showPicker) { try { p.showPicker(); return; } catch {} }
