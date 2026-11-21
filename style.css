@@ -50,7 +50,8 @@ h3 { margin: 0 0 12px; }
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; justify-content: space-between;
   background: var(--accent); color: #fff;
-  padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
+  /* iPhoneは画面の一番上の近くを自動で薄くするので、日付をその範囲より少し下に置く */
+  padding: calc(22px + env(safe-area-inset-top)) 8px 6px;
 }
 .topbar button { background: none; border: none; color: #fff; }
 .icon-btn { font-size: 1.8rem; width: 48px; height: 44px; line-height: 1; }
