@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-21d";
+const APP_VERSION = "2026-11-21e";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -118,7 +118,7 @@ function renderSummary() {
   const macro = (key, label, color) => {
     const rem = g[key] - t[key];
     return `<div class="macro">
-      <div class="macro-head"><b>${label} ${r0(t[key])} / ${r0(g[key])}g</b>
+      <div class="macro-head"><b>${label} ${r0(t[key])} / ${r0(g[key])}g<span class="macro-pct">${g[key] > 0 ? r0((t[key] / g[key]) * 100) : 0}%</span></b>
       <span class="rem ${rem < 0 ? "over" : ""}">${rem >= 0 ? `残り ${r0(rem)}g` : `${r0(-rem)}g オーバー`}</span></div>
       <div class="bar"><i style="width:${pct(t[key], g[key])}%;background:${rem < 0 ? "var(--over)" : color}"></i></div></div>`;
   };
