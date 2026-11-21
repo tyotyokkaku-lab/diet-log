@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-21f";
+const APP_VERSION = "2026-11-22a";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -185,6 +185,7 @@ function renderCandidate(extra = "") {
       <label class="field qty"><span>量（人前）</span><input data-k="qty" type="number" inputmode="decimal" step="0.1" min="0.1" value="${it.qty}"></label>
     </div>`).join("")}
     ${note ? `<p class="note">メモ：${esc(note)}</p>` : ""}
+    ${source === "manual" ? `<button type="button" id="candKcalCalc" class="kcal-calc">P・F・Cからkcalを計算</button>` : ""}
     <div class="row">
       <button type="button" id="candCancel">やめる</button>
       ${source === "dict" ? `<button type="button" id="candAI">AIで計算し直す</button>` : ""}
@@ -445,8 +446,19 @@ function upsertDict(item, source, inputText) {
   }
 }
 
+// 自分で数値を入れて記録する
+function openManualEntry() {
+  candidates = { source: "manual", note: "", items: [{ name: $("foodInput").value.trim(), kcal: 0, p: 0, f: 0, c: 0, qty: num($("qtyInput").value) || 1 }] };
+  renderCandidate();
+  const nameInput = document.querySelector('#candidate input[data-k="name"]');
+  const first = nameInput && !nameInput.value ? nameInput : document.querySelector('#candidate input[data-k="kcal"]');
+  first?.focus();
+  first?.select?.();
+}
+
 function saveCandidates() {
   readCandidateInputs();
+  if (candidates.items.some((it) => !it.name)) { alert("メニュー名を入れてください。"); return; }
   const text = $("foodInput").value.trim();
   const single = candidates.items.length === 1;
   for (const it of candidates.items) {
@@ -729,6 +741,8 @@ $("entryForm").addEventListener("submit", (e) => {
   calculate(text, num($("qtyInput").value) || 1);
 });
 
+$("manualEntryBtn").addEventListener("click", openManualEntry);
+
 $("photoInput").addEventListener("change", async (e) => {
   const input = e.target;
   const files = [...input.files];
@@ -759,9 +773,16 @@ $("candidate").addEventListener("click", (e) => {
   if (id === "candCancel") { candidates = null; renderCandidate(); }
   if (id === "candSave") saveCandidates();
   if (id === "candAI") { calculate($("foodInput").value.trim(), num($("qtyInput").value) || 1, true); }
-  if (id === "manualBtn") {
-    candidates = { source: "manual", note: "", items: [{ name: $("foodInput").value.trim(), kcal: 0, p: 0, f: 0, c: 0, qty: num($("qtyInput").value) || 1 }] };
-    renderCandidate();
+  if (id === "manualBtn") openManualEntry();
+  if (id === "candKcalCalc") {
+    // たんぱく質・炭水化物は1gあたり4kcal、脂質は9kcalで計算
+    document.querySelectorAll("#candidate .cand-item").forEach((el) => {
+      const it = candidates.items[+el.dataset.i];
+      const v = (k) => num(el.querySelector(`input[data-k="${k}"]`).value);
+      const total = v("p") * 4 + v("f") * 9 + v("c") * 4;
+      el.querySelector('input[data-k="kcal"]').value = r0(total);
+      it.kcal = total / (it.qty || 1);
+    });
   }
 });
 

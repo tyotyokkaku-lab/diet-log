@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-21f">
+  <link rel="stylesheet" href="style.css?v=2026-11-22a">
 </head>
 <body>
   <header class="topbar">
@@ -44,6 +44,7 @@
         </form>
         <label class="photo-btn" id="photoBtn">写真から計算<input type="file" id="photoInput" accept="image/*" multiple hidden></label>
         <div id="photoTray"></div>
+        <button type="button" id="manualEntryBtn" class="manual-btn">数値を自分で入力して記録</button>
         <p class="hint" style="margin-top:6px">1回の食事につき写真は6枚まで。何枚か追加してから「まとめて計算」を押します。推定は目安です。上の欄に「すき家」「ご飯少なめ」などを書くと補足として使われます。</p>
         <div id="candidate"></div>
       </div>
@@ -142,6 +143,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-21f"></script>
+  <script type="module" src="app.js?v=2026-11-22a"></script>
 </body>
 </html>
