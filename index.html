@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-22b">
+  <link rel="stylesheet" href="style.css?v=2026-11-22c">
 </head>
 <body>
   <header class="topbar">
@@ -45,7 +45,20 @@
         </form>
         <label class="photo-btn" id="photoBtn">写真から計算<input type="file" id="photoInput" accept="image/*" multiple hidden></label>
         <div id="photoTray"></div>
-        <button type="button" id="manualEntryBtn" class="manual-btn">数値を自分で入力して記録</button>
+        <div class="manual-box" id="manualBox">
+          <div class="manual-title">数値がわかるときは、ここに入れて記録</div>
+          <div class="row four">
+            <label class="field"><span>kcal</span><input id="mKcal" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>P</span><input id="mP" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>F</span><input id="mF" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>C</span><input id="mC" type="number" inputmode="decimal" step="any"></label>
+          </div>
+          <div class="row">
+            <button type="button" id="manualKcalCalc">PFCからkcal</button>
+            <button type="button" class="primary" id="manualSave">この数値で記録</button>
+          </div>
+          <p class="hint" style="margin:0">名前は上の「食べたもの」、量は「量（人前）」の欄を使います。kcalが空ならP・F・Cから計算します。</p>
+        </div>
         <p class="hint" style="margin-top:6px">1回の食事につき写真は6枚まで。何枚か追加してから「まとめて計算」を押します。推定は目安です。上の欄に「すき家」「ご飯少なめ」などを書くと補足として使われます。</p>
         <div id="candidate"></div>
       </div>
@@ -144,6 +157,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-22b"></script>
+  <script type="module" src="app.js?v=2026-11-22c"></script>
 </body>
 </html>

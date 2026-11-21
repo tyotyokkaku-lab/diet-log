@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-22b";
+const APP_VERSION = "2026-11-22c";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -53,6 +53,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const r0 = (n) => Math.round(n);
 const r1 = (n) => Math.round(n * 10) / 10;
+const blank0 = (n) => (n ? n : ""); // 0は空欄にして、そのまま打ち込めるようにする
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const normKey = (s) => s.normalize("NFKC").toLowerCase().replace(/[\s　・,、。]/g, "").replace(/の/g, "");
@@ -177,10 +178,10 @@ function renderCandidate(extra = "") {
         ${items.length > 1 ? `<button type="button" class="cand-rm" data-rm-item="${i}" aria-label="${esc(it.name)}を記録しない">×</button>` : ""}
       </div>
       <div class="row four">
-        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${r0(it.kcal * it.qty)}"></label>
-        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${r1(it.p * it.qty)}"></label>
-        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${r1(it.f * it.qty)}"></label>
-        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${r1(it.c * it.qty)}"></label>
+        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${blank0(r0(it.kcal * it.qty))}"></label>
+        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.p * it.qty))}"></label>
+        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.f * it.qty))}"></label>
+        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.c * it.qty))}"></label>
       </div>
       <label class="field qty"><span>量（人前）</span><input data-k="qty" type="number" inputmode="decimal" step="0.1" min="0.1" value="${it.qty}"></label>
     </div>`).join("")}
@@ -357,7 +358,7 @@ async function calculate(text, qty, forceAI = false) {
 
 function showError(e) {
     renderCandidate(`<p class="error">${esc(e.message)}</p>
-      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">数値を手入力する</button>`);
+      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">下の欄に数値を自分で入れる</button>`);
 }
 
 // 送る前に貯めておく写真（1回の食事ぶん）
@@ -446,14 +447,35 @@ function upsertDict(item, source, inputText) {
   }
 }
 
-// 自分で数値を入れて記録する
+// 自分で数値を入れて記録する（写真の下の入力欄）
 function openManualEntry() {
-  candidates = { source: "manual", note: "", items: [{ name: $("foodInput").value.trim(), kcal: 0, p: 0, f: 0, c: 0, qty: num($("qtyInput").value) || 1 }] };
+  candidates = null;
   renderCandidate();
-  const nameInput = document.querySelector('#candidate input[data-k="name"]');
-  const first = nameInput && !nameInput.value ? nameInput : document.querySelector('#candidate input[data-k="kcal"]');
-  first?.focus();
-  first?.select?.();
+  $("manualBox").scrollIntoView({ block: "center", behavior: "smooth" });
+  $("mKcal").focus();
+}
+function manualPfcToKcal() {
+  const total = num($("mP").value) * 4 + num($("mF").value) * 9 + num($("mC").value) * 4;
+  $("mKcal").value = total ? r0(total) : "";
+}
+function saveManualInline() {
+  const name = $("foodInput").value.trim();
+  if (!name) { alert("上の「食べたもの」にメニュー名を入れてください。"); $("foodInput").focus(); return; }
+  const vals = { kcal: num($("mKcal").value), p: num($("mP").value), f: num($("mF").value), c: num($("mC").value) };
+  if (!vals.kcal && (vals.p || vals.f || vals.c)) vals.kcal = vals.p * 4 + vals.f * 9 + vals.c * 4; // kcalが空ならPFCから
+  if (!vals.kcal) { alert("kcal か P・F・C のどれかを入れてください。"); $("mKcal").focus(); return; }
+  const qty = num($("qtyInput").value) || 1;
+  // 入力した数値は「量」ぶんの合計として扱い、1人前あたりにして保存する
+  const it = { name, qty, kcal: vals.kcal / qty, p: vals.p / qty, f: vals.f / qty, c: vals.c / qty };
+  state.entries.push({ id: uid(), date: currentDate, meal: currentMeal, ...it, source: "manual", createdAt: Date.now() });
+  upsertDict(it, "manual", null);
+  save();
+  for (const id of ["mKcal", "mP", "mF", "mC"]) $(id).value = "";
+  $("foodInput").value = "";
+  $("qtyInput").value = "1";
+  candidates = null;
+  renderCandidate();
+  renderToday();
 }
 
 function saveCandidates() {
@@ -788,7 +810,8 @@ $("entryForm").addEventListener("submit", (e) => {
   calculate(text, num($("qtyInput").value) || 1);
 });
 
-$("manualEntryBtn").addEventListener("click", openManualEntry);
+$("manualSave").addEventListener("click", saveManualInline);
+$("manualKcalCalc").addEventListener("click", manualPfcToKcal);
 
 $("photoInput").addEventListener("change", async (e) => {
   const input = e.target;

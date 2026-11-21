@@ -271,3 +271,8 @@ input, select, textarea, .paste-box textarea { font-size: 16px; }
 .sg-item:active { background: var(--accent-soft); }
 .sg-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sg-kcal { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+
+/* 数値の直接入力欄 */
+.manual-box { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.manual-title { font-size: .85rem; font-weight: 600; margin-bottom: 8px; }
+.manual-box input { background: var(--card); }
