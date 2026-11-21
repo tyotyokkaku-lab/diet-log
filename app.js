@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-21c";
+const APP_VERSION = "2026-11-21d";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -124,8 +124,8 @@ function renderSummary() {
   };
   $("summary").innerHTML = `
     <div class="kcal-head">
-      <div class="remain ${remain < 0 ? "over" : ""}">${remain >= 0 ? r0(remain) : r0(-remain)}<small> kcal ${remain >= 0 ? "残り" : "オーバー"}</small></div>
-      <div class="hint" style="margin:0">${r0(t.kcal)} / ${r0(g.kcal)} kcal</div>
+      <div class="eaten"><span class="eaten-label">摂取</span>${r0(t.kcal)}<small> / ${r0(g.kcal)} kcal</small></div>
+      <div class="remain ${remain < 0 ? "over" : ""}"><span class="remain-label">${remain >= 0 ? "残り" : "オーバー"}</span>${r0(Math.abs(remain))}<small> kcal</small></div>
     </div>
     <div class="bar"><i style="width:${pct(t.kcal, g.kcal)}%;background:${remain < 0 ? "var(--over)" : "var(--kcal)"}"></i></div>
     ${macro("p", "P たんぱく質", "var(--p)")}

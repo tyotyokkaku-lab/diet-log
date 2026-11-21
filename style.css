@@ -250,3 +250,12 @@ main { background: var(--bg); }
 html, body, * { touch-action: pan-x pan-y; }
 /* iPhoneは16px未満の入力欄をタップすると自動で拡大するので、入力欄はすべて16px以上 */
 input, select, textarea, .paste-box textarea { font-size: 16px; }
+
+/* 今日のカロリー：摂取（大）と残り（中）を並べる */
+.summary .kcal-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
+.summary .eaten { font-size: 2.4rem; font-weight: 700; line-height: 1.05; }
+.summary .eaten small { font-size: .9rem; font-weight: 500; color: var(--muted); }
+.summary .eaten-label, .summary .remain-label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); line-height: 1.4; }
+.summary .remain { font-size: 1.5rem; font-weight: 700; line-height: 1.1; text-align: right; color: var(--kcal); }
+.summary .remain small { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.summary .remain.over, .summary .remain.over .remain-label { color: var(--over); }
