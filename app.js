@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-19b";
+const APP_VERSION = "2026-11-21a";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -170,17 +170,17 @@ function renderCandidate(extra = "") {
   box.innerHTML = `<div class="cand">
     <div><b>この内容で記録しますか？</b><span class="badge ${source === "ai" || source === "photo" ? "ai" : ""}">${SOURCE_LABEL[source]}</span></div>
     ${candidates.photoUrls?.length ? `<div class="thumbs">${candidates.photoUrls.map((u) => `<img src="${u}" alt="送った写真">`).join("")}</div>` : ""}
-    <p class="note">数値は「1人前」あたりです。違っていたら直してから記録してください。</p>
+    <p class="note">数値は「量」に合わせた合計です。量を変えると自動で計算し直します。違っていたら直してから記録してください。</p>
     ${items.map((it, i) => `<div class="cand-item" data-i="${i}">
       <div class="cand-name-row">
         <input class="name-input" data-k="name" value="${esc(it.name)}">
         ${items.length > 1 ? `<button type="button" class="cand-rm" data-rm-item="${i}" aria-label="${esc(it.name)}を記録しない">×</button>` : ""}
       </div>
       <div class="row four">
-        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${r0(it.kcal)}"></label>
-        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${r1(it.p)}"></label>
-        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${r1(it.f)}"></label>
-        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${r1(it.c)}"></label>
+        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${r0(it.kcal * it.qty)}"></label>
+        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${r1(it.p * it.qty)}"></label>
+        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${r1(it.f * it.qty)}"></label>
+        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${r1(it.c * it.qty)}"></label>
       </div>
       <label class="field qty"><span>量（人前）</span><input data-k="qty" type="number" inputmode="decimal" step="0.1" min="0.1" value="${it.qty}"></label>
     </div>`).join("")}
@@ -404,15 +404,32 @@ async function calculateFromPhotos() {
   }
 }
 
+// 候補の it.kcal〜it.c は常に「1人前あたり」で持ち、画面には「量」をかけた合計を出す。
+// 数値欄の変更は入力のたびに1人前あたりへ戻して it に入れる（下の input イベント）。
 function readCandidateInputs() {
   document.querySelectorAll("#candidate .cand-item").forEach((el) => {
     const it = candidates.items[+el.dataset.i];
-    el.querySelectorAll("input").forEach((inp) => {
-      const k = inp.dataset.k;
-      it[k] = k === "name" ? inp.value.trim() : num(inp.value);
-    });
+    it.name = el.querySelector('input[data-k="name"]').value.trim();
+    it.qty = num(el.querySelector('input[data-k="qty"]').value) || it.qty || 1;
   });
 }
+$("candidate").addEventListener("input", (e) => {
+  const inp = e.target;
+  const el = inp.closest(".cand-item");
+  if (!el || !candidates) return;
+  const it = candidates.items[+el.dataset.i];
+  const k = inp.dataset.k;
+  if (k === "qty") {
+    const q = num(inp.value);
+    if (q <= 0) return; // 入力途中（空欄など）は何もしない
+    it.qty = q;
+    for (const m of ["kcal", "p", "f", "c"]) {
+      el.querySelector(`input[data-k="${m}"]`).value = m === "kcal" ? r0(it[m] * q) : r1(it[m] * q);
+    }
+  } else if (["kcal", "p", "f", "c"].includes(k)) {
+    it[k] = num(inp.value) / (it.qty || 1);
+  }
+});
 
 function upsertDict(item, source, inputText) {
   const entry = {

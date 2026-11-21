@@ -239,3 +239,8 @@ main {
 }
 .tabbar { position: relative; flex: 0 0 auto; }
 .date-btn:disabled { opacity: 1; cursor: default; }
+
+/* 画面の一番上（時計の裏）まで濃い緑で塗る。真ん中のスクロール部分だけ明るい背景 */
+html, body { background: var(--accent); }
+main { background: var(--bg); }
+.tabbar { background: var(--card); }
