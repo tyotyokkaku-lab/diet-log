@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-21b";
+const APP_VERSION = "2026-11-21c";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -920,6 +920,13 @@ $("importJson").addEventListener("change", async (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !$("view-today").hidden) renderToday();
 });
+
+// 画面の拡大を止める（ダブルタップ・2本指での拡大）
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+}
+document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 // 予期しないエラーを画面に出す（スマホでは原因がわかりにくいため）
 window.addEventListener("error", (e) => alert("エラー：" + (e.message || e.error)));

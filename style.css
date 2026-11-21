@@ -245,3 +245,8 @@ main {
 html, body { background: var(--accent); }
 main { background: var(--bg); }
 .tabbar { background: var(--card); }
+
+/* ダブルタップでの拡大をしない（スクロールはできる） */
+html, body, * { touch-action: pan-x pan-y; }
+/* iPhoneは16px未満の入力欄をタップすると自動で拡大するので、入力欄はすべて16px以上 */
+input, select, textarea, .paste-box textarea { font-size: 16px; }
