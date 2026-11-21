@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-22a">
+  <link rel="stylesheet" href="style.css?v=2026-11-22b">
 </head>
 <body>
   <header class="topbar">
@@ -31,9 +31,10 @@
           <div class="meal-tabs" id="mealTabs" role="radiogroup" aria-label="食事区分"></div>
           <label class="field">
             <span>食べたもの</span>
-            <input id="foodInput" list="dictList" placeholder="例：すき家 牛丼 並盛" required>
+            <input id="foodInput" placeholder="例：すき家 牛丼 並盛" required autocomplete="off">
             <datalist id="dictList"></datalist>
           </label>
+          <div id="suggest" class="suggest" hidden></div>
           <div class="row">
             <label class="field qty">
               <span>量（人前）</span>
@@ -143,6 +144,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-22a"></script>
+  <script type="module" src="app.js?v=2026-11-22b"></script>
 </body>
 </html>

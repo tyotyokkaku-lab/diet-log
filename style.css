@@ -263,3 +263,11 @@ input, select, textarea, .paste-box textarea { font-size: 16px; }
 .summary .eaten .kcal-pct { font-size: .85rem; vertical-align: 4px; color: var(--text); }
 .manual-btn { display: block; width: 100%; margin-top: 8px; background: none; color: var(--accent); font-weight: 600; }
 .kcal-calc { display: block; width: 100%; margin: 4px 0 10px; }
+
+/* 入力の候補 */
+.suggest { margin: -4px 0 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+.sg-item { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: none; border-radius: 0; border-top: 1px solid var(--line); background: none; text-align: left; padding: 10px 12px; min-height: 44px; }
+.sg-item:first-child { border-top: none; }
+.sg-item:active { background: var(--accent-soft); }
+.sg-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sg-kcal { color: var(--muted); font-size: .85rem; white-space: nowrap; }

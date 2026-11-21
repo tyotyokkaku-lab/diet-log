@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-22a";
+const APP_VERSION = "2026-11-22b";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -734,10 +734,57 @@ $("mealTabs").addEventListener("click", (e) => {
   renderMealTabs();
 });
 
+// ---------- 入力の候補（マイ辞書から） ----------
+// ひらがな・カタカナ、全角・半角、大文字・小文字、空白の違いは無視して比べる
+const foldKana = (str) => str.normalize("NFKC").toLowerCase()
+  .replace(/[\s　・]/g, "")
+  .replace(/[\u3041-\u3096]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+function suggestionsFor(q) {
+  const fq = foldKana(q);
+  if (!fq) return [];
+  const byName = new Map();
+  for (const d of Object.values(state.dict)) {
+    const prev = byName.get(d.name);
+    if (!prev || (d.count || 0) > (prev.count || 0)) byName.set(d.name, d);
+  }
+  const hits = [];
+  for (const d of byName.values()) {
+    const fn = foldKana(d.name);
+    if (fn === fq) continue; // すでに同じ名前が入っている
+    const at = fn.indexOf(fq);
+    if (at < 0) continue;
+    hits.push({ d, rank: at === 0 ? 0 : 1 }); // 先頭が同じものを上に
+  }
+  hits.sort((a, b) => a.rank - b.rank || (b.d.count || 0) - (a.d.count || 0));
+  return hits.slice(0, 8).map((h) => h.d);
+}
+function renderSuggest() {
+  const box = $("suggest");
+  const list = suggestionsFor($("foodInput").value);
+  if (!list.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.innerHTML = list.map((d) => `<button type="button" class="sg-item" data-name="${esc(d.name)}">
+      <span class="sg-name">${esc(d.name)}</span><span class="sg-kcal">${r0(d.kcal)} kcal</span></button>`).join("");
+  box.hidden = false;
+}
+$("foodInput").addEventListener("input", renderSuggest);
+$("foodInput").addEventListener("focus", renderSuggest);
+$("foodInput").addEventListener("blur", () => setTimeout(() => { $("suggest").hidden = true; }, 200));
+// pointerdown で選ぶ（キーボードが閉じて候補が消える前に拾うため）
+$("suggest").addEventListener("pointerdown", (e) => {
+  const b = e.target.closest(".sg-item");
+  if (!b) return;
+  e.preventDefault();
+  $("foodInput").value = b.dataset.name;
+  $("suggest").hidden = true;
+  $("foodInput").blur();
+  calculate(b.dataset.name, num($("qtyInput").value) || 1);
+});
+
 $("entryForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("foodInput").value.trim();
   if (!text) return;
+  $("suggest").hidden = true;
   calculate(text, num($("qtyInput").value) || 1);
 });
 
