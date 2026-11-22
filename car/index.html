@@ -12,12 +12,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="社用車">
-<link rel="stylesheet" href="style.css?v=1.0.0">
+<link rel="stylesheet" href="style.css?v=1.1.0">
 </head>
 <body>
 <header class="topbar"><h1>🚗 社用車メンテナンス</h1></header>
 <div class="wrap">
 
+<div id="banner" class="banner hide"></div>
 <div class="card" id="status"></div>
 
 <div class="card">
@@ -37,6 +38,14 @@
 <section id="km">
 <div class="card">
 <b>今日のメーター記録</b>
+<div id="photoBox" class="hide">
+<label>メーターの写真</label>
+<div class="two"><label class="btn sec filebtn" for="photoCam">📷 カメラで撮影</label><label class="btn sec filebtn" for="photoLib">🖼 写真から選ぶ</label></div>
+<input type="file" id="photoCam" accept="image/*" capture="environment" class="hide">
+<input type="file" id="photoLib" accept="image/*" class="hide">
+<img id="prev" class="prev" alt="">
+<div class="msg" id="readMsg"></div>
+</div>
 <div class="two">
 <div><label for="kmDate">日付</label><input type="date" id="kmDate"></div>
 <div><label for="kmVal">総走行距離 (km)</label><input type="number" inputmode="numeric" id="kmVal" placeholder="例 159333"></div>
@@ -123,8 +132,23 @@
 <div class="msg" id="exMsg"></div>
 </div>
 
+<div class="card">
+<b>サーバー連携(スマホとパソコンで共有・写真読み取り)</b>
+<div class="note" id="srvState">つないでいません。データはこの端末の中だけにあります。</div>
+<label for="srvUrl">サーバーのURL</label>
+<input id="srvUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://car-maint-api.〇〇.workers.dev">
+<label for="srvPass">合言葉</label>
+<input id="srvPass" type="password" autocomplete="current-password">
+<div class="two">
+<button class="btn" id="srvSave">つなぐ</button>
+<button class="btn sec" id="srvOff">解除</button>
+</div>
+<button class="btn sec hide" id="srvUpload">この端末のデータをサーバーに送る</button>
+<div class="msg" id="srvMsg"></div>
+</div>
+
 <div class="foot" id="foot"></div>
 </div>
-<script src="app.js?v=1.0.0"></script>
+<script src="app.js?v=1.1.0"></script>
 </body>
 </html>

@@ -46,3 +46,33 @@
 - 旧アプリ（Claudeのチャット内のもの）の「データをコピー」で出したJSON `{km, oil, tire, set}` を「バックアップ・引っ越し」に貼り付けて取り込む
 - Service Worker（`car/sw.js`）でオフラインでも開ける。ネットにつながるときは常に最新を取りに行く。中身を変えたら `sw.js` の `CACHE`・`app.js` の `APP_VERSION`・`index.html` の `?v=` を揃えて上げる
 - **アイコン**：`car/icon-1024.png` を差し替えてGitHubに上げると、GitHub Actions（`.github/workflows/car-icons.yml`）が `icon-180/192/512.png` を作り直してコミットする。手元で作るときは `python car/tools/make_icons.py`（Pillowが必要）
+
+## 段階B：サーバー（`worker/`）
+
+Cloudflare Workers + D1（無料枠）。`car/` の画面の「サーバー連携」にURLと合言葉を入れると、記録がサーバーに保存され、スマホとパソコンで同じデータが見られる。写真からのメーター読み取りもサーバー経由（Claude Haiku 5.5）。
+
+- 秘密の値は Cloudflare のシークレットに置く（コード・Gitには入れない）：`PASSCODE`（合言葉）、`ANTHROPIC_API_KEY`
+- 普通の設定は `worker/wrangler.toml` の `[vars]`：`ALLOWED_ORIGIN`、`MODEL`（精度が足りなければ `claude-sonnet-5-5`）、`READ_LIMIT_PER_DAY`
+- テーブルは `worker/schema.sql`。動作確認は `cd worker && node test/smoke.mjs`
+- すべてのAPIは `Authorization: Bearer <合言葉>` が必要。合言葉の間違いが1日50回を超えるとその日は止まる
+
+### API
+
+| | |
+|---|---|
+| `POST /api/odometer` | 走行距離を1件登録。`{"date":"2026-11-22","odo":159333}`（`date` を省くと今日・日本時間）。前回より小さいと 409 `{needConfirm:true}`、そのまま記録するなら `"force":true` を付ける。1,500km以上増えたときは `warning` が返る |
+| `GET /api/odometer/latest` | 最新の記録 |
+| `DELETE /api/odometer/<日付>` | その日の記録を削除 |
+| `POST /api/odometer/bulk` | `{rows:[{date,odo}]}` をまとめて追加（既存の日付は上書きしない） |
+| `POST /api/oil` ・ `POST /api/tire` | 交換記録を追加 / `DELETE /api/oil/<id>` ・ `DELETE /api/tire/<id>` |
+| `PUT /api/settings` | 交換の目安 `{oilKm, oilMo, tireKm, tireMo}` |
+| `GET /api/data` ・ `PUT /api/data` | 全データ `{km, oil, tire, set}` の読み出し・置き換え |
+| `POST /api/read-meter` | `{image: "data:image/jpeg;base64,..."}` → `{odometer, confidence, prev}` |
+
+スマートグラス（Even G2）からは、たとえば次のように送る：
+
+```
+curl -X POST https://<サーバー>/api/odometer \
+  -H "Authorization: Bearer <合言葉>" -H "Content-Type: application/json" \
+  -d '{"odo":159333}'
+```

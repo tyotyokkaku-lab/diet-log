@@ -1,5 +1,7 @@
-// 社用車メンテナンス(段階A:サーバーなし。データはこの端末のブラウザ内 IndexedDB に保存)
-const APP_VERSION = "1.0.0";
+// 社用車メンテナンス
+// サーバー未接続:データはこの端末のブラウザ内(IndexedDB)だけに保存
+// サーバー接続中:サーバー(Cloudflare Workers + D1)が正。この端末には表示用の控えを保存
+const APP_VERSION = "1.1.0";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2, "0");
@@ -64,6 +66,44 @@ function normalize(d) {
   };
 }
 
+// ---- サーバー連携 ----
+let SRV = null; // { url, pass }
+try { SRV = JSON.parse(localStorage.getItem("carServer") || "null"); } catch (e) {}
+const online = () => !!(SRV && SRV.url && SRV.pass);
+async function api(method, path, body, srv) {
+  srv = srv || SRV;
+  let r;
+  try {
+    r = await fetch(srv.url.replace(/\/+$/, "") + path, {
+      method,
+      headers: { "Authorization": "Bearer " + srv.pass, ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+  } catch (e) { const er = new Error("サーバーにつながりません。電波を確認してください。"); er.network = true; throw er; }
+  let d = null; try { d = await r.json(); } catch (e) {}
+  if (!r.ok) { const er = new Error((d && d.error) || ("サーバーエラー(" + r.status + ")")); er.status = r.status; er.data = d; throw er; }
+  return d;
+}
+function setBanner(t) { $("banner").textContent = t || ""; $("banner").classList.toggle("hide", !t); }
+async function pull() {
+  const d = await api("GET", "/api/data");
+  S = normalize(d); await save(); setBanner(""); render();
+}
+// サーバーに送ってから画面のデータを変える。失敗したら何も変えずにメッセージを出す
+async function remote(fn) {
+  if (!online()) return true;
+  try { await fn(); return true; }
+  catch (e) { if (e.status !== 409) toast(e.message); throw e; }
+}
+function showServerState() {
+  $("srvUrl").value = SRV ? SRV.url : ""; $("srvPass").value = SRV ? SRV.pass : "";
+  $("srvState").textContent = online() ? "サーバーにつないでいます。記録はサーバーに保存され、ほかの端末でも同じデータが見られます。" : "つないでいません。データはこの端末の中だけにあります。";
+  $("srvUpload").classList.toggle("hide", !online());
+  $("photoBox").classList.toggle("hide", !online());
+  $("foot").textContent = "バージョン " + APP_VERSION + " ・ " + (online() ? "サーバーと同期中" : "データはこの端末の中だけに保存されています");
+}
+
 async function init() {
   ["kmDate", "oilDate", "tireDate"].forEach(i => $(i).value = today());
   let d = null;
@@ -72,9 +112,17 @@ async function init() {
   if (d) S = normalize(d);
   // ブラウザが勝手にデータを消さないようにお願いする(対応ブラウザのみ)
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
-  $("foot").textContent = "バージョン " + APP_VERSION + " ・ データはこの端末の中だけに保存されています";
+  showServerState();
   render();
+  if (online()) {
+    try { await pull(); }
+    catch (e) { setBanner("サーバーから読み込めませんでした(" + e.message + ")。表示は前回の控えです。"); }
+  }
 }
+// アプリに戻ってきたとき、ほかの端末で記録した分を取り込む
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && online()) pull().catch(() => {});
+});
 
 const sortAsc = a => a.slice().sort((x, y) => x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
 const latestKm = () => S.km.length ? sortAsc(S.km).pop().odo : 0;
@@ -125,10 +173,17 @@ document.addEventListener("click", e => {
     setTimeout(() => { b.dataset.arm = ""; b.textContent = "削除"; }, 3000);
     return;
   }
-  S[b.dataset.d] = S[b.dataset.d].filter(r => r.id !== b.dataset.id); save(); render();
+  const kind = b.dataset.d, id = b.dataset.id;
+  const row = S[kind].find(r => r.id === id); if (!row) return;
+  b.disabled = true;
+  remote(() => kind === "km" ? api("DELETE", "/api/odometer/" + row.date) : api("DELETE", `/api/${kind}/${encodeURIComponent(id)}`))
+    .then(() => { S[kind] = S[kind].filter(r => r.id !== id); save(); render(); })
+    .catch(() => { b.disabled = false; });
 });
 
-$("kmSave").onclick = () => {
+let busy = false;
+$("kmSave").onclick = async () => {
+  if (busy) return;
   const date = $("kmDate").value, odo = parseInt($("kmVal").value, 10);
   if (!date || isNaN(odo)) { $("kmMsg").textContent = "日付と距離を入力してください。"; return; }
   const prev = S.km.filter(r => r.date < date).sort((a, b) => a.date < b.date ? 1 : -1)[0];
@@ -137,32 +192,119 @@ $("kmSave").onclick = () => {
     $("kmMsg").textContent = `前回(${fmt(prev.odo)}km)より小さい値です。このままなら、もう一度「記録する」を押してください。`;
     return;
   }
-  kmWarn = null;
+  const force = kmWarn === odo;
+  const id = String(Date.now());
+  busy = true;
+  try {
+    await remote(() => api("POST", "/api/odometer", { id, date, odo, force }));
+  } catch (e) {
+    busy = false;
+    if (e.status === 409) { kmWarn = odo; $("kmMsg").textContent = e.message.replace(/。このまま記録するなら.*$/, "。このままなら、もう一度「記録する」を押してください。"); }
+    else $("kmMsg").textContent = "記録できませんでした:" + e.message;
+    return;
+  }
+  busy = false; kmWarn = null;
   S.km = S.km.filter(r => r.date !== date);
-  S.km.push({ id: String(Date.now()), date, odo });
+  S.km.push({ id, date, odo });
   save();
   $("kmMsg").textContent = prev ? `記録しました。前回から ${fmt(odo - prev.odo)} km 走行。` : "記録しました。";
   $("kmVal").value = ""; $("oilKm").value = ""; $("tireKm").value = "";
+  $("photoCam").value = ""; $("photoLib").value = ""; $("prev").style.display = "none"; $("readMsg").textContent = "";
   render();
 };
 $("kmVal").addEventListener("input", () => { kmWarn = null; });
 
-$("oilSave").onclick = () => {
+async function addRec(kind, row, done) {
+  try { await remote(() => api("POST", "/api/" + kind, row)); } catch (e) { return; }
+  S[kind].push(row); save(); render(); toast(done);
+}
+$("oilSave").onclick = async () => {
   const date = $("oilDate").value, odo = parseInt($("oilKm").value, 10);
   if (!date || isNaN(odo)) return toast("日付と距離を入力してください");
-  S.oil.push({ id: String(Date.now()), date, odo, note: $("oilNote").value.trim() });
-  $("oilNote").value = ""; save(); render(); toast("オイル交換を記録しました");
+  await addRec("oil", { id: String(Date.now()), date, odo, note: $("oilNote").value.trim() }, "オイル交換を記録しました");
+  $("oilNote").value = "";
 };
-$("tireSave").onclick = () => {
+$("tireSave").onclick = async () => {
   const date = $("tireDate").value, odo = parseInt($("tireKm").value, 10);
   if (!date || isNaN(odo)) return toast("日付と距離を入力してください");
-  S.tire.push({ id: String(Date.now()), date, odo, type: $("tireType").value, note: $("tireNote").value.trim() });
-  $("tireNote").value = ""; save(); render(); toast("タイヤ交換を記録しました");
+  await addRec("tire", { id: String(Date.now()), date, odo, type: $("tireType").value, note: $("tireNote").value.trim() }, "タイヤ交換を記録しました");
+  $("tireNote").value = "";
 };
-$("sSave").onclick = () => {
+$("sSave").onclick = async () => {
   const g = i => Math.max(1, parseInt($(i).value, 10) || 1);
-  S.set = { oilKm: g("sOilKm"), oilMo: g("sOilMo"), tireKm: g("sTireKm"), tireMo: g("sTireMo") };
-  save(); render(); toast("設定を保存しました");
+  const set = { oilKm: g("sOilKm"), oilMo: g("sOilMo"), tireKm: g("sTireKm"), tireMo: g("sTireMo") };
+  try { await remote(() => api("PUT", "/api/settings", set)); } catch (e) { return; }
+  S.set = set; save(); render(); toast("設定を保存しました");
+};
+
+// ---- 写真からメーターを読む(サーバー接続中のみ) ----
+function resize(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const m = 1920, s = Math.min(1, m / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      res({ dataUrl: c.toDataURL("image/jpeg", 0.85), url: u });
+    };
+    img.onerror = rej; img.src = u;
+  });
+}
+const onPhoto = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const msg = $("readMsg");
+  try {
+    const { dataUrl, url } = await resize(f);
+    $("prev").src = url; $("prev").style.display = "block";
+    msg.textContent = "メーターを読み取り中…";
+    const r = await api("POST", "/api/read-meter", { image: dataUrl, date: $("kmDate").value });
+    if (r && r.odometer != null) {
+      $("kmVal").value = r.odometer; kmWarn = null;
+      msg.textContent = r.confidence === "low" ? "読み取りに自信がありません。写真と見比べて確認してください。" : "読み取り結果を確認して「記録する」を押してください。";
+    } else msg.textContent = "数字を読み取れませんでした。手入力してください。";
+  } catch (err) { msg.textContent = (err && err.message ? err.message : "読み取りに失敗しました。") + " 数字を手入力してください。"; }
+};
+$("photoCam").onchange = onPhoto; $("photoLib").onchange = onPhoto;
+
+// ---- サーバーの設定 ----
+$("srvSave").onclick = async () => {
+  const url = $("srvUrl").value.trim(), pass = $("srvPass").value;
+  const msg = $("srvMsg"); msg.classList.remove("err");
+  if (!/^https:\/\//.test(url) || !pass) { msg.textContent = "https:// で始まるURLと合言葉を入れてください。"; msg.classList.add("err"); return; }
+  const cand = { url: url.replace(/\/+$/, ""), pass };
+  msg.textContent = "確認中…";
+  let d;
+  try { d = await api("GET", "/api/data", null, cand); }
+  catch (e) { msg.textContent = "つなげませんでした:" + e.message; msg.classList.add("err"); return; }
+  SRV = cand; try { localStorage.setItem("carServer", JSON.stringify(SRV)); } catch (e) {}
+  const serverEmpty = !d.km.length && !d.oil.length && !d.tire.length;
+  const localHas = S.km.length + S.oil.length + S.tire.length > 0;
+  if (serverEmpty && localHas) {
+    showServerState();
+    msg.textContent = "つなぎました。サーバーはまだ空です。下の「この端末のデータをサーバーに送る」を押して、今のデータをサーバーに入れてください。";
+    return;
+  }
+  S = normalize(d); await save(); showServerState(); render();
+  msg.textContent = `つなぎました(${summary(S)})。`;
+};
+$("srvOff").onclick = () => {
+  SRV = null; try { localStorage.removeItem("carServer"); } catch (e) {}
+  showServerState(); setBanner("");
+  $("srvMsg").textContent = "解除しました。これからの記録はこの端末の中だけに保存されます。"; $("srvMsg").classList.remove("err");
+};
+let upArm = false;
+$("srvUpload").onclick = async () => {
+  const msg = $("srvMsg"); msg.classList.remove("err");
+  if (!upArm) {
+    upArm = true; $("srvUpload").textContent = "もう一度タップで送る";
+    msg.textContent = `サーバーのデータを、この端末のデータ(${summary(S)})で置き換えます。`;
+    setTimeout(() => { upArm = false; $("srvUpload").textContent = "この端末のデータをサーバーに送る"; }, 5000);
+    return;
+  }
+  upArm = false; $("srvUpload").textContent = "この端末のデータをサーバーに送る";
+  msg.textContent = "送信中…";
+  try { await api("PUT", "/api/data", plain()); await pull(); msg.textContent = `サーバーに送りました(${summary(S)})。`; }
+  catch (e) { msg.textContent = "送れませんでした:" + e.message; msg.classList.add("err"); }
 };
 
 // ---- 書き出し ----
@@ -205,6 +347,11 @@ $("bkImport").onclick = async () => {
     return;
   }
   bkArm = false; $("bkImport").textContent = "取り込む";
+  if (online()) {
+    msg.textContent = "サーバーに送信中…";
+    try { await api("PUT", "/api/data", n); }
+    catch (e) { msg.textContent = "取り込めませんでした:" + e.message; msg.classList.add("err"); return; }
+  }
   S = n; kmAll = false; await save(); render();
   $("bkText").value = "";
   msg.textContent = `取り込みました(${summary(S)})。`;
@@ -212,7 +359,7 @@ $("bkImport").onclick = async () => {
 
 // ---- Excel貼り付け ----
 function parseDate(s) { const m = String(s).trim().match(/^(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/); return m ? m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0") : null; }
-$("impBtn").onclick = () => {
+$("impBtn").onclick = async () => {
   const have = new Set(S.km.map(r => r.date)); const nr = []; let skip = 0, dup = 0;
   for (const ln of $("impText").value.split(/\r?\n/)) {
     if (!ln.trim()) continue;
@@ -226,6 +373,10 @@ $("impBtn").onclick = () => {
   if (!nr.length) { $("impMsg").textContent = "取り込める行がありませんでした。日付と距離の列を貼り付けてください。"; return; }
   nr.sort((a, b) => a.date < b.date ? -1 : 1);
   let back = 0; for (let i = 1; i < nr.length; i++) if (nr[i].odo < nr[i - 1].odo) back++;
+  if (online()) {
+    try { await api("POST", "/api/odometer/bulk", { rows: nr }); }
+    catch (e) { $("impMsg").textContent = "取り込めませんでした:" + e.message; return; }
+  }
   S.km = S.km.concat(nr); save(); render(); $("impText").value = "";
   $("impMsg").textContent = `${nr.length}件を取り込みました(${nr[0].date}〜${nr[nr.length - 1].date})。` + (dup ? ` 既存の日付${dup}件はスキップ。` : "") + (skip ? ` 読み取れない行${skip}件はスキップ。` : "") + (back ? ` 前日より距離が小さい行が${back}件あります。履歴で確認してください。` : "");
 };
