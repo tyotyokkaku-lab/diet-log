@@ -1,7 +1,7 @@
 // 社用車メンテナンス
 // サーバー未接続:データはこの端末のブラウザ内(IndexedDB)だけに保存
 // サーバー接続中:サーバー(Cloudflare Workers + D1)が正。この端末には表示用の控えを保存
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2, "0");
