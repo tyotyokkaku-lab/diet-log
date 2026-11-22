@@ -11,4 +11,4 @@ READ_LIMIT_PER_DAY = "30"
 [[d1_databases]]
 binding = "DB"
 database_name = "car-maint"
-database_id = "ここにD1のIDを入れる"
+database_id = "60be4fc2-1487-4504-b523-d22041ace517"
