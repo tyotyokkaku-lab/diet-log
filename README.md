@@ -69,7 +69,16 @@ Cloudflare Workers + D1（無料枠）。`car/` の画面の「サーバー連�
 | `GET /api/data` ・ `PUT /api/data` | 全データ `{km, oil, tire, set}` の読み出し・置き換え |
 | `POST /api/read-meter` | `{image: "data:image/jpeg;base64,..."}` → `{odometer, confidence, prev}` |
 
-スマートグラス（Even G2）からは、たとえば次のように送る：
+### Even G2（音声）
+
+Even アプリの Add Agent に、URL `https://car-maint-api.tyotyokkaku.workers.dev/` とトークン（合言葉）を設定する。`POST /`・`/agent`・`…/chat/completions` に OpenAI 互換の形で届いた発話を `worker/src/agent.js` が処理し、必ず200で「メガネに表示する文章」を返す。
+
+- 「今日の走行距離は85キロ」（前回の記録に足す）、「メーターは12万3456キロ」（総走行距離）、「昨日／おととい」にも対応
+- 「取り消し」で直前の音声記録を戻す。「車の状況は？」でメーターとオイル・タイヤの時期を答える
+- 距離と関係ない発話は Claude（ウェブ検索つき）が短く答える
+- 届いた問い合わせは直近50件を `GET /api/debug` で見られる（合言葉そのものは残さない）
+
+APIで直接送る場合の例：
 
 ```
 curl -X POST https://<サーバー>/api/odometer \

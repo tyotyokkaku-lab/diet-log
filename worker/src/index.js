@@ -11,6 +11,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { agentEntry, isAgentPath } from "./agent.js";
 
 const DEFAULT_SET = { oilKm: 5000, oilMo: 6, tireKm: 40000, tireMo: 36 };
 const MAX_FAILS_PER_DAY = 50; // 合言葉の間違いがこれを超えた日は、その日いっぱい受け付けない
@@ -231,6 +232,10 @@ async function route(req, env) {
   await checkAuth(req, env);
 
   if (p === "/api/data" && M === "GET") return loadAll(env);
+  if (p === "/api/debug" && M === "GET") {
+    const rows = await env.DB.prepare("SELECT at, info FROM agentlog ORDER BY id DESC LIMIT 20").all();
+    return rows.results.map(r => ({ at: r.at, ...JSON.parse(r.info) }));
+  }
   if (p === "/api/data" && M === "PUT") { const n = await replaceAll(env, await body(req)); return { ok: true, count: n }; }
 
   if (p === "/api/odometer" && M === "POST") return addOdometer(env, await body(req));
@@ -275,6 +280,13 @@ async function route(req, env) {
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env, req) });
+    const url = new URL(req.url);
+    // Even G2(Even AI の Add Agent)からの音声入力は POST / などで届く
+    if (isAgentPath(req, url.pathname.replace(/\/+$/, ""))) return agentEntry(req, env, url, {
+      sameSecret,
+      locked: async () => (await counter(env, "fail:" + todayJST())) >= MAX_FAILS_PER_DAY,
+      onFail: () => bump(env, "fail:" + todayJST()),
+    });
     try {
       return json(await route(req, env), 200, env, req);
     } catch (e) {

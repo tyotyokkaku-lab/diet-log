@@ -90,6 +90,33 @@ check("APIキーなしの写真読み取りは500で説明", r.status === 500 &&
 r = await call("OPTIONS", "/api/data", null, { Origin: H.Origin });
 check("プリフライト", r.status === 204 || r.status === 200, r);
 
+
+// ---- Even G2(音声) ----
+async function say(text, token = "test-passcode-123", extra = {}) {
+  const r = await mf.dispatchFetch("http://x/", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ model: "x", messages: [{ role: "user", content: text }], ...extra }) });
+  if (extra.stream) return { status: r.status, text: await r.text() };
+  const d = await r.json(); return { status: r.status, text: d.choices[0].message.content };
+}
+await call("PUT", "/api/data", { km: [{ date: "2026-01-01", odo: 150000 }], oil: [], tire: [], set: {} });
+r = await say("今日の走行距離は八十五キロ");
+check("音声:1日の距離(漢数字)", r.status === 200 && /走行85km/.test(r.text) && /150,085/.test(r.text), r);
+r = await say("取り消し");
+check("音声:取り消し", /取り消しました/.test(r.text), r);
+r = await say("メーターは15万200キロ");
+check("音声:総走行距離", /メーター150,200km/.test(r.text) && /前回から200km/.test(r.text), r);
+r = await say("メーターは１４９，０００キロ");
+check("音声:前回より小さいと記録しない", /記録しませんでした/.test(r.text), r);
+r = await say("車の状況は？");
+check("音声:状況の報告", /メーターは150,200km/.test(r.text), r);
+r = await say("今日の走行距離は10キロ", "wrongpass");
+check("音声:合言葉違いでも200で説明", r.status === 200 && /トークンが違います/.test(r.text), r);
+r = await say("車の状況は？", "test-passcode-123", { stream: true });
+check("音声:stream(SSE)", /data: \[DONE\]/.test(r.text) && /150,200/.test(r.text), r);
+r = await mf.dispatchFetch("http://x/v1/chat/completions", { method: "POST", headers: { "x-api-key": "test-passcode-123" }, body: JSON.stringify({ messages: [{ role: "user", content: "車の状況" }] }) });
+check("音声:/chat/completions と x-api-key", (await r.json()).choices[0].message.content.includes("150,200"), null);
+r = await call("GET", "/api/debug");
+check("音声:ログ", Array.isArray(r.data) && r.data.length >= 5 && !JSON.stringify(r.data).includes("test-passcode-123"), r.data.length);
+
 await mf.dispose();
 console.log(fails ? `\n${fails}件 NG` : "\nすべてOK");
 process.exit(fails ? 1 : 0);
