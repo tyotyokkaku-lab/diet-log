@@ -1,6 +1,6 @@
 // オフラインでも開けるようにするための Service Worker
 // ネットにつながるときは常に最新を取りに行き、つながらないときは保存しておいた画面を使う
-const CACHE = "car-1.0.0";
+const CACHE = "car-1.1.0";
 const FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

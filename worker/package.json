@@ -1,0 +1,16 @@
+{
+  "name": "car-maint-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute car-maint --remote --file=schema.sql"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.12.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "4.166.0"
+  }
+}
