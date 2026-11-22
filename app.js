@@ -11,13 +11,14 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-22c";
+const APP_VERSION = "2026-11-22d";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
   goal: { kcal: 2000, p: 24, f: 22.5, c: 53.5 }, // P120g / F50g / C約267g
   entries: [], // {id,date,meal,name,qty,kcal,p,f,c,source,createdAt}  ※kcal〜cは1人前あたり
   dict: {}, // key -> {name,kcal,p,f,c,source,count,updatedAt}
+  noRecord: {}, // date -> 理由（例：「帰省中」）  記録できなかった日
   pastDays: {}, // date -> {kcal,p,f,c,note}  エクセルから取り込んだ日別合計（null=未記録）
 });
 
@@ -129,9 +130,13 @@ function renderSummary() {
       <div class="remain ${remain < 0 ? "over" : ""}"><span class="remain-label">${remain >= 0 ? "残り" : "オーバー"}</span>${r0(Math.abs(remain))}<small> kcal</small></div>
     </div>
     <div class="bar"><i style="width:${pct(t.kcal, g.kcal)}%;background:${remain < 0 ? "var(--over)" : "var(--kcal)"}"></i></div>
-    ${macro("p", "P たんぱく質", "var(--p)")}
+    ${state.noRecord[currentDate] != null
+      ? `<button type="button" class="norec-block" id="noRecEdit" aria-label="記録なしの理由を変更">
+          <span class="norec-reason">${esc(state.noRecord[currentDate])}</span><span class="norec-sub">により記録なし</span></button>`
+      : `${macro("p", "P たんぱく質", "var(--p)")}
     ${macro("f", "F 脂質", "var(--f)")}
     ${macro("c", "C 炭水化物", "var(--c)")}
+    <div class="norec-row"><button type="button" class="norec-btn" id="noRecOpen">記録なしにする</button></div>`}
     ${t0.past ? `<p class="note">この日はエクセルから取り込んだ合計です${t0.note ? `（${esc(t0.note)}）` : ""}。空欄の項目は0として表示しています。</p>` : ""}`;
 }
 
@@ -584,7 +589,10 @@ function dailyBars(dayList, g) {
   const bars = dayList.map((d, i) => {
     const v = vals[i];
     const md = d.slice(5).replace("-", "/").replace(/^0/, "");
-    if (v == null) return `<button class="db-bar" data-tip="${md} 記録なし"><i class="db-none"></i></button>`;
+    if (v == null) {
+      const reason = state.noRecord[dayList[i]];
+      return `<button class="db-bar" data-tip="${md} ${reason != null ? esc(reason) + "により記録なし" : "記録なし"}"><i class="db-none ${reason != null ? "db-norec" : ""}"></i></button>`;
+    }
     const isOver = v > g.kcal * 1.05;
     isOver ? over++ : ok++;
     const diff = v - g.kcal;
@@ -622,7 +630,7 @@ function avgBlock(title, n) {
     <p class="gb-note">基準：カロリー・脂質・炭水化物は目標の105%を超えたら「超過」、たんぱく質は目標の90%未満で「不足」</p></div>`;
 }
 function renderHistory() {
-  const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays)])].sort().reverse();
+  const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays), ...Object.keys(state.noRecord)])].sort().reverse();
   if (!dates.length) { $("historyList").innerHTML = `<p class="empty">まだ記録がありません</p>`; $("historyAvg").innerHTML = ""; return; }
   const t = todayStr();
   const within = (n) => dates.filter((d) => d < t && d >= shiftDate(t, -n));
@@ -630,6 +638,12 @@ function renderHistory() {
   const g = goalGrams();
   $("historyList").innerHTML = dates.map((d) => {
     const x = totalsFor(d);
+    const reason = state.noRecord[d];
+    if (reason != null && dayTotal(d) == null) {
+      return `<div class="hist-row"><button data-date="${d}"><b>${dateLabel(d)}</b><br>
+        <small class="hint">${esc(reason)}により記録なし</small></button>
+        <div style="text-align:right"><span class="badge norec-badge">記録なし</span></div></div>`;
+    }
     const diff = x.kcal == null ? null : x.kcal - g.kcal;
     return `<div class="hist-row"><button data-date="${d}">
         <b>${dateLabel(d)}</b>${x.past ? `<span class="badge">取込</span>` : ""}<br>
@@ -811,6 +825,34 @@ $("entryForm").addEventListener("submit", (e) => {
 });
 
 $("manualSave").addEventListener("click", saveManualInline);
+
+// ---------- 記録なしの日 ----------
+function openNoRecord() {
+  const cur = state.noRecord[currentDate];
+  $("noRecTitle").textContent = `${dateLabel(currentDate)} を記録なしにする`;
+  $("noRecReason").value = cur ?? "";
+  $("noRecDelete").hidden = cur == null;
+  $("noRecDialog").showModal();
+  setTimeout(() => $("noRecReason").focus(), 50);
+}
+$("summary").addEventListener("click", (e) => {
+  if (e.target.closest("#noRecOpen, #noRecEdit")) openNoRecord();
+});
+$("noRecReason").addEventListener("input", () => {
+  $("noRecPreview").textContent = ($("noRecReason").value.trim() || "（理由）") + "により記録なし";
+});
+$("noRecDialog").addEventListener("close", () => {
+  const action = $("noRecDialog").returnValue;
+  if (action === "save") {
+    const reason = $("noRecReason").value.trim();
+    if (!reason) { alert("理由を入れてください（例：帰省中）"); return; }
+    state.noRecord[currentDate] = reason;
+  } else if (action === "delete") {
+    delete state.noRecord[currentDate];
+  } else return;
+  save();
+  renderToday();
+});
 $("manualKcalCalc").addEventListener("click", manualPfcToKcal);
 
 $("photoInput").addEventListener("change", async (e) => {

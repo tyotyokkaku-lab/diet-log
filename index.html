@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-22c">
+  <link rel="stylesheet" href="style.css?v=2026-11-22d">
 </head>
 <body>
   <header class="topbar">
@@ -134,6 +134,19 @@
     <button data-view="settings">設定</button>
   </nav>
 
+  <dialog id="noRecDialog">
+    <form method="dialog">
+      <h3 id="noRecTitle">記録なしにする</h3>
+      <label class="field"><span>理由</span><input id="noRecReason" placeholder="例：帰省中" autocomplete="off"></label>
+      <p class="hint">表示：<b id="noRecPreview">（理由）により記録なし</b></p>
+      <div class="row">
+        <button value="delete" class="danger" id="noRecDelete" formnovalidate>記録なしを解除</button>
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="editDialog">
     <form method="dialog" id="editForm">
       <h3>記録を編集</h3>
@@ -157,6 +170,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-22c"></script>
+  <script type="module" src="app.js?v=2026-11-22d"></script>
 </body>
 </html>
