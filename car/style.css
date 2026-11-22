@@ -37,3 +37,16 @@ hr{border:0;border-top:1px solid var(--bd);margin:16px 0 8px}
 .hide{display:none}
 .prev{max-width:100%;max-height:180px;border-radius:10px;margin-top:10px;display:none}
 .banner{background:var(--warn);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+
+/* 画面の固定:上のタイトルバーは動かさず、その下だけをスクロールさせる
+   (iPhoneで下に引っ張ったとき、タイトルごと落ちてこないように) */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--bar); }
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding-bottom: 0; }
+/* iPhoneは画面の一番上の近くを自動で薄くするので、タイトルをその範囲より少し下に置く */
+.topbar { flex: 0 0 auto; padding-top: calc(env(safe-area-inset-top, 0px) + 22px); }
+.wrap {
+  flex: 1 1 auto; min-height: 0; max-width: none; margin: 0;
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: none;
+  background: var(--bg);
+  padding: 12px max(calc(14px + env(safe-area-inset-right, 0px)), calc((100% - 532px) / 2)) calc(40px + env(safe-area-inset-bottom, 0px)) max(calc(14px + env(safe-area-inset-left, 0px)), calc((100% - 532px) / 2));
+}
