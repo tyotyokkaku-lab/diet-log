@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>社用車メンテナンス</title>
+<meta name="theme-color" content="#1d4ed8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="社用車">
+<link rel="stylesheet" href="style.css?v=1.0.0">
+</head>
+<body>
+<header class="topbar"><h1>🚗 社用車メンテナンス</h1></header>
+<div class="wrap">
+
+<div class="card" id="status"></div>
+
+<div class="card">
+<b>月ごとの走行距離</b>
+<div class="seg" id="chSeg" style="margin-top:8px"><button data-n="12" class="on">12か月</button><button data-n="0">全期間</button></div>
+<div id="chart"></div>
+<div class="msg">右が最新の月です。12か月表示は左右にスワイプすると過去の月が見られます。薄い棒は今月(途中)です。単位はkm。</div>
+</div>
+
+<div class="tabs">
+<button data-t="km" class="on">走行距離</button>
+<button data-t="oil">オイル</button>
+<button data-t="tire">タイヤ</button>
+<button data-t="rank">ランキング</button>
+</div>
+
+<section id="km">
+<div class="card">
+<b>今日のメーター記録</b>
+<div class="two">
+<div><label for="kmDate">日付</label><input type="date" id="kmDate"></div>
+<div><label for="kmVal">総走行距離 (km)</label><input type="number" inputmode="numeric" id="kmVal" placeholder="例 159333"></div>
+</div>
+<button class="btn" id="kmSave">記録する</button>
+<div class="msg" id="kmMsg"></div>
+</div>
+<div class="card"><b>履歴</b><div id="kmList"></div></div>
+</section>
+
+<section id="oil" class="hide">
+<div class="card">
+<b>オイル交換を記録</b>
+<div class="two">
+<div><label for="oilDate">交換日</label><input type="date" id="oilDate"></div>
+<div><label for="oilKm">交換時の距離 (km)</label><input type="number" inputmode="numeric" id="oilKm"></div>
+</div>
+<label for="oilNote">メモ(オイル種類・店舗・費用など)</label><input id="oilNote">
+<button class="btn" id="oilSave">記録する</button>
+</div>
+<div class="card"><b>履歴</b><div id="oilList"></div></div>
+</section>
+
+<section id="tire" class="hide">
+<div class="card">
+<b>タイヤ交換を記録</b>
+<div class="two">
+<div><label for="tireDate">実施日</label><input type="date" id="tireDate"></div>
+<div><label for="tireKm">交換時の距離 (km)</label><input type="number" inputmode="numeric" id="tireKm"></div>
+</div>
+<label for="tireType">種類</label>
+<select id="tireType"><option>交換(夏タイヤ)</option><option>交換(冬タイヤ)</option><option>履き替え</option><option>ローテーション</option><option>その他</option></select>
+<label for="tireNote">メモ</label><input id="tireNote">
+<button class="btn" id="tireSave">記録する</button>
+</div>
+<div class="card"><b>履歴</b><div id="tireList"></div></div>
+</section>
+
+<section id="rank" class="hide">
+<div class="card">
+<div class="seg"><button id="rkD" class="on">日別TOP20</button><button id="rkM">月別TOP20</button></div>
+<div id="rkSum"></div>
+<div id="rkList"></div>
+<div class="msg" id="rkNote"></div>
+</div>
+</section>
+
+<div class="card">
+<b>過去データの取り込み(Excel)</b>
+<div class="note">Excelの「日付」と「おわり」の列をコピーして貼り付けてください。A〜D列をまとめてコピーしてもOKです。すでに記録がある日付は上書きしません。</div>
+<textarea id="impText" rows="5" placeholder="2023/9/9 101998"></textarea>
+<button class="btn" id="impBtn">取り込む</button>
+<div class="msg" id="impMsg"></div>
+</div>
+
+<div class="card">
+<b>交換の目安(設定)</b>
+<div class="two">
+<div><label for="sOilKm">オイル:距離 (km)</label><input type="number" inputmode="numeric" id="sOilKm"></div>
+<div><label for="sOilMo">オイル:期間 (か月)</label><input type="number" inputmode="numeric" id="sOilMo"></div>
+<div><label for="sTireKm">タイヤ:距離 (km)</label><input type="number" inputmode="numeric" id="sTireKm"></div>
+<div><label for="sTireMo">タイヤ:期間 (か月)</label><input type="number" inputmode="numeric" id="sTireMo"></div>
+</div>
+<button class="btn sec" id="sSave">設定を保存</button>
+</div>
+
+<div class="card">
+<b>バックアップ・引っ越し</b>
+<div class="note">旧アプリの「データをコピー」で出した文字を下に貼り付けるか、書き出したファイルを選んで「取り込む」を押してください。今のデータは取り込んだ内容に置き換わります。</div>
+<textarea id="bkText" rows="4" placeholder='{"km":[...],"oil":[...],"tire":[...],"set":{...}}'></textarea>
+<div class="two">
+<label class="btn sec filebtn" for="bkFile">ファイルを選ぶ</label>
+<button class="btn" id="bkImport">取り込む</button>
+</div>
+<input type="file" id="bkFile" accept="application/json,.json,.txt" class="hide">
+<div class="msg" id="bkMsg"></div>
+<hr>
+<div class="note">すべての記録を書き出します(機種変更・バックアップ用)。</div>
+<div class="two">
+<button class="btn sec" id="exBtn">データをコピー</button>
+<button class="btn sec" id="exFile">ファイルに保存</button>
+</div>
+<textarea id="exText" rows="3" readonly class="hide" style="margin-top:10px"></textarea>
+<div class="msg" id="exMsg"></div>
+</div>
+
+<div class="foot" id="foot"></div>
+</div>
+<script src="app.js?v=1.0.0"></script>
+</body>
+</html>
