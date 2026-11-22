@@ -35,3 +35,14 @@
 - 写真（カメラ／カメラロール）から牌を読み取って手牌に並べる（Claude API）。APIキーは画面下の「設定」で入力。同じサイトの食事ログ・シフトに入れたキーがあればそれも使う
 - 牌の絵とアイコン（`icon.svg`、PNGはそこから書き出し）はSVGで自作
 - 開いたときに `version.txt` を見て、古いページなら自動で読み込み直す（バージョンを上げるときは `app.js` の `APP_VERSION`・`index.html` の `?v=`・`version.txt` を揃える）。バージョンは「設定」に表示
+
+---
+
+# 社用車メンテナンス（`car/`）
+
+社用車の走行距離・オイル交換・タイヤ交換を記録するスマホ向けWebアプリ（PWA）。`car/index.html` を開き、iPhoneのSafariで「ホーム画面に追加」すると独立したアプリとして起動する。
+
+- **段階A（今）**：サーバーなし。データはその端末のブラウザ内（IndexedDB）にだけ保存。メーター写真の読み取りはまだなし（手入力）
+- 旧アプリ（Claudeのチャット内のもの）の「データをコピー」で出したJSON `{km, oil, tire, set}` を「バックアップ・引っ越し」に貼り付けて取り込む
+- Service Worker（`car/sw.js`）でオフラインでも開ける。ネットにつながるときは常に最新を取りに行く。中身を変えたら `sw.js` の `CACHE`・`app.js` の `APP_VERSION`・`index.html` の `?v=` を揃えて上げる
+- **アイコン**：`car/icon-1024.png` を差し替えてGitHubに上げると、GitHub Actions（`.github/workflows/car-icons.yml`）が `icon-180/192/512.png` を作り直してコミットする。手元で作るときは `python car/tools/make_icons.py`（Pillowが必要）
