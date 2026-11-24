@@ -17,12 +17,31 @@
   const load = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
+  // ---------- 画面の固定 ----------
+  // 普段はスクロールさせない（iPhoneで引っ張っても画面が動かないよう、指の動きごと止める）。
+  // 「単価を変える」を開いて画面からはみ出したときだけ、その画面をスクロールできるようにする
+  const settings = document.querySelector('.settings');
+  const updateScroll = () => requestAnimationFrame(() => {
+    document.querySelectorAll('main.view').forEach((v) => {
+      v.classList.remove('scroll');
+      if (!v.hidden && v.scrollHeight > v.clientHeight + 1) v.classList.add('scroll');
+      else v.scrollTop = 0;
+    });
+  });
+  settings.addEventListener('toggle', updateScroll);
+  window.addEventListener('resize', updateScroll);
+  document.addEventListener('click', updateScroll);
+  document.addEventListener('touchmove', (e) => {
+    if (!e.target.closest('main.view.scroll')) e.preventDefault();
+  }, { passive: false });
+
   // ---------- タブ ----------
   const tabs = document.querySelectorAll('.tabbar button');
   function show(view) {
     document.querySelectorAll("main.view").forEach((v) => { v.hidden = v.id !== 'view-' + view; });
     tabs.forEach((b) => b.classList.toggle('on', b.dataset.view === view));
     save('tax.view', view);
+    updateScroll();
   }
   tabs.forEach((b) => b.addEventListener('click', () => show(b.dataset.view)));
   show(load('tax.view') === 'site' ? 'site' : 'tax');
