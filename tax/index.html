@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="内税計算">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <!-- 内税計算 -->
@@ -54,7 +54,11 @@
 
     <div class="row">
       <label for="m3">体積</label>
-      <input id="m3" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      <div class="stepper">
+        <button type="button" id="m3Minus" aria-label="0.5㎥減らす">−</button>
+        <input id="m3" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+        <button type="button" id="m3Plus" aria-label="0.5㎥増やす">＋</button>
+      </div>
       <span class="unit">㎥</span>
     </div>
 
@@ -121,6 +125,6 @@
       現場計算
     </button>
   </nav>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

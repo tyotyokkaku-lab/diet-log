@@ -92,6 +92,16 @@
     // 体積を入れ直したら台数は自動に戻す（前の現場で変えた台数が残らないように）
     m3El.addEventListener('input', () => { trucksTouched = false; calc(); });
     m3El.addEventListener('focus', () => m3El.select());
+    // −／＋で0.5㎥ずつ（0より下にはしない）
+    const stepM3 = (d) => {
+      const v = toNum(m3El.value);
+      const next = Math.max(0, Math.round(((Number.isFinite(v) ? v : 0) + d) * 100) / 100);
+      m3El.value = String(next);
+      trucksTouched = false;
+      calc();
+    };
+    $('m3Minus').addEventListener('click', () => stepM3(-0.5));
+    $('m3Plus').addEventListener('click', () => stepM3(0.5));
     trucksEl.addEventListener('input', () => { trucksTouched = true; calc(); });
     trucksEl.addEventListener('focus', () => trucksEl.select());
     const step = (d) => {
