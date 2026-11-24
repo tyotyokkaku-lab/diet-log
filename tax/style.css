@@ -61,3 +61,60 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .chips button.on { border-color: var(--accent); color: var(--accent); }
 .note { text-align: right; color: var(--muted); font-size: 15px; margin-top: 4px; }
+
+/* ---- タブ ---- */
+body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+main { padding: 32px 0 24px; }
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: flex;
+  background: var(--out);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button {
+  flex: 1; border: 0; background: none; color: var(--muted);
+  font: inherit; font-size: 12px; padding: 8px 0 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.tabbar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.tabbar button.on { color: var(--accent); }
+
+/* ---- 現場計算 ---- */
+.stepper { display: grid; grid-template-columns: 52px 1fr 52px; gap: 6px; }
+.stepper input { text-align: center; }
+.stepper button {
+  font: inherit; font-size: 24px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--box); color: var(--fg); min-height: 52px;
+}
+.sub { margin: -10px 0 16px calc(3.2em + 14px); color: var(--muted); font-size: 14px; min-height: 1em; }
+.lines { border-top: 1px solid var(--line); margin: 8px 0 16px; }
+.line {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 17px;
+}
+.line small { color: var(--muted); font-size: 13px; margin-left: 4px; }
+.line b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.line b::after { content: " 円"; font-weight: 400; font-size: 15px; }
+.receipt {
+  border: 2px solid var(--accent); border-radius: 12px; padding: 16px 18px;
+  background: var(--box);
+}
+.r-title { font-size: 14px; color: var(--accent); font-weight: 700; }
+.r-total {
+  display: flex; align-items: baseline; justify-content: center; gap: 4px;
+  font-size: 26px; margin: 6px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px;
+}
+.r-total b { font-size: 44px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.r-rows div { display: flex; align-items: baseline; gap: 6px; font-size: 17px; padding: 3px 0; }
+.r-rows div > span:first-child { flex: 1; }
+.r-rows b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.r-memo { margin-top: 10px; font-size: 15px; color: var(--muted); }
+.settings { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.settings summary { color: var(--accent); font-size: 15px; margin-bottom: 14px; }
+.settings .unit { font-size: 15px; white-space: nowrap; }
+.settings .row { grid-template-columns: 3.2em 1fr 3.6em; }
+.reset {
+  font: inherit; font-size: 14px; color: var(--muted); background: none;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; margin-left: calc(3.2em + 14px);
+}
