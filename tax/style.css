@@ -118,3 +118,26 @@ main { padding: 32px 0 24px; }
   font: inherit; font-size: 14px; color: var(--muted); background: none;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; margin-left: calc(3.2em + 14px);
 }
+
+/* ---- 画面の固定 ----
+   ダブルタップで拡大しない（ボタンを素早く2回押しても拡大されない）
+   ページ全体は動かさず、タブの上の部分だけをスクロールさせる
+   （iPhoneで下に引っ張っても上に余白が出ない／タブバーも動かない） */
+html, body, button, input { touch-action: manipulation; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body {
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  padding: 0;
+}
+[hidden] { display: none !important; }
+main.view {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: none;
+  max-width: none; margin: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 32px)
+           max(16px, calc((100% - 420px) / 2))
+           24px;
+}
+.tabbar { position: static; flex: 0 0 auto; }
