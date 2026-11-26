@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>内税計算</title>
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="内税計算">
+  <link rel="stylesheet" href="style.css?v=6">
+</head>
+<body>
+  <!-- 内税計算 -->
+  <main id="view-tax" class="view">
+    <h1>内税計算</h1>
+
+    <div class="row">
+      <label for="amount">金額</label>
+      <input id="amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      <span class="unit">円</span>
+    </div>
+
+    <div class="row">
+      <label for="rate">税率</label>
+      <input id="rate" type="text" inputmode="decimal" autocomplete="off" value="10">
+      <span class="unit">%</span>
+    </div>
+    <div class="chips">
+      <button type="button" data-rate="10">10%</button>
+      <button type="button" data-rate="8">8%（軽減）</button>
+    </div>
+
+    <div class="row">
+      <label for="tax">内税</label>
+      <output id="tax" class="box"></output>
+      <span class="unit">円</span>
+    </div>
+
+    <div class="row">
+      <label for="net">税抜</label>
+      <output id="net" class="box strong"></output>
+      <span class="unit">円</span>
+    </div>
+
+    <p class="note">※端数は切り捨て（税抜＝金額−内税）</p>
+  </main>
+
+  <!-- 現場計算（発泡スチロール） -->
+  <main id="view-site" class="view" hidden>
+    <h1>現場計算</h1>
+
+    <div class="row">
+      <label for="m3">体積</label>
+      <div class="stepper">
+        <button type="button" id="m3Minus" aria-label="0.5㎥減らす">−</button>
+        <input id="m3" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+        <button type="button" id="m3Plus" aria-label="0.5㎥増やす">＋</button>
+      </div>
+      <span class="unit">㎥</span>
+    </div>
+
+    <div class="row">
+      <label for="trucks">台数</label>
+      <div class="stepper">
+        <button type="button" id="truckMinus" aria-label="1台減らす">−</button>
+        <input id="trucks" type="text" inputmode="numeric" autocomplete="off" value="1">
+        <button type="button" id="truckPlus" aria-label="1台増やす">＋</button>
+      </div>
+      <span class="unit">台</span>
+    </div>
+    <p class="sub" id="truckHint"></p>
+
+    <div class="lines">
+      <div class="line"><span>処分費 <small id="dispDetail"></small></span><b id="dispAmt">0</b></div>
+      <div class="line"><span>運搬費 <small id="carryDetail"></small></span><b id="carryAmt">0</b></div>
+    </div>
+
+    <section class="receipt" aria-label="領収書に書く内容">
+      <div class="r-title">領収書に書く金額</div>
+      <div class="r-total"><span>¥</span><b id="total">0</b><span>-</span></div>
+      <div class="r-rows">
+        <div><span>内訳　税抜金額</span><b id="totalNet">0</b>円</div>
+        <div><span>消費税額（<span id="siteRateLabel">10</span>%）</span><b id="totalTax">0</b>円</div>
+      </div>
+      <div class="r-memo">但し　<span id="memo">発泡スチロール回収代として</span></div>
+    </section>
+    <p class="note">※単価は税込。消費税は合計から内税で計算（切り捨て）</p>
+
+    <details class="settings">
+      <summary>単価を変える</summary>
+      <div class="row">
+        <label for="unitPrice">単価</label>
+        <input id="unitPrice" type="text" inputmode="numeric" autocomplete="off">
+        <span class="unit">円/㎥</span>
+      </div>
+      <div class="row">
+        <label for="carryPrice">運搬</label>
+        <input id="carryPrice" type="text" inputmode="numeric" autocomplete="off">
+        <span class="unit">円/台</span>
+      </div>
+      <div class="row">
+        <label for="fullM3">満車</label>
+        <input id="fullM3" type="text" inputmode="decimal" autocomplete="off">
+        <span class="unit">㎥</span>
+      </div>
+      <div class="row">
+        <label for="siteRate">税率</label>
+        <input id="siteRate" type="text" inputmode="decimal" autocomplete="off">
+        <span class="unit">%</span>
+      </div>
+      <button type="button" class="reset" id="resetPrices">はじめの値に戻す</button>
+    </details>
+  </main>
+
+  <nav class="tabbar">
+    <button type="button" data-view="tax">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5z M8 6h8v3H8z M8 12h2v2H8z M11 12h2v2h-2z M14 12h2v2h-2z M8 16h2v2H8z M11 16h2v2h-2z M14 16h2v2h-2z"/></svg>
+      内税
+    </button>
+    <button type="button" data-view="site">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h12v10H2z M14 9h4l3 3v4h-7z M6 19a2 2 0 1 0 0-.01z M17 19a2 2 0 1 0 0-.01z"/></svg>
+      現場計算
+    </button>
+  </nav>
+  <script src="app.js?v=6"></script>
+</body>
+</html>

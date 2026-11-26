@@ -2,15 +2,16 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>食事ログ</title>
   <meta name="theme-color" content="#2f7d5b">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-18a">
+  <link rel="stylesheet" href="style.css?v=2026-11-22d">
 </head>
 <body>
   <header class="topbar">
@@ -30,9 +31,10 @@
           <div class="meal-tabs" id="mealTabs" role="radiogroup" aria-label="食事区分"></div>
           <label class="field">
             <span>食べたもの</span>
-            <input id="foodInput" list="dictList" placeholder="例：すき家 牛丼 並盛" required>
+            <input id="foodInput" placeholder="例：すき家 牛丼 並盛" required autocomplete="off">
             <datalist id="dictList"></datalist>
           </label>
+          <div id="suggest" class="suggest" hidden></div>
           <div class="row">
             <label class="field qty">
               <span>量（人前）</span>
@@ -43,6 +45,20 @@
         </form>
         <label class="photo-btn" id="photoBtn">写真から計算<input type="file" id="photoInput" accept="image/*" multiple hidden></label>
         <div id="photoTray"></div>
+        <div class="manual-box" id="manualBox">
+          <div class="manual-title">数値がわかるときは、ここに入れて記録</div>
+          <div class="row four">
+            <label class="field"><span>kcal</span><input id="mKcal" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>P</span><input id="mP" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>F</span><input id="mF" type="number" inputmode="decimal" step="any"></label>
+            <label class="field"><span>C</span><input id="mC" type="number" inputmode="decimal" step="any"></label>
+          </div>
+          <div class="row">
+            <button type="button" id="manualKcalCalc">PFCからkcal</button>
+            <button type="button" class="primary" id="manualSave">この数値で記録</button>
+          </div>
+          <p class="hint" style="margin:0">名前は上の「食べたもの」、量は「量（人前）」の欄を使います。kcalが空ならP・F・Cから計算します。</p>
+        </div>
         <p class="hint" style="margin-top:6px">1回の食事につき写真は6枚まで。何枚か追加してから「まとめて計算」を押します。推定は目安です。上の欄に「すき家」「ご飯少なめ」などを書くと補足として使われます。</p>
         <div id="candidate"></div>
       </div>
@@ -118,6 +134,19 @@
     <button data-view="settings">設定</button>
   </nav>
 
+  <dialog id="noRecDialog">
+    <form method="dialog">
+      <h3 id="noRecTitle">記録なしにする</h3>
+      <label class="field"><span>理由</span><input id="noRecReason" placeholder="例：帰省中" autocomplete="off"></label>
+      <p class="hint">表示：<b id="noRecPreview">（理由）により記録なし</b></p>
+      <div class="row">
+        <button value="delete" class="danger" id="noRecDelete" formnovalidate>記録なしを解除</button>
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="editDialog">
     <form method="dialog" id="editForm">
       <h3>記録を編集</h3>
@@ -141,6 +170,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-18a"></script>
+  <script type="module" src="app.js?v=2026-11-22d"></script>
 </body>
 </html>

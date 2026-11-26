@@ -11,13 +11,14 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-18a";
+const APP_VERSION = "2026-11-22d";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
   goal: { kcal: 2000, p: 24, f: 22.5, c: 53.5 }, // P120g / F50g / C約267g
   entries: [], // {id,date,meal,name,qty,kcal,p,f,c,source,createdAt}  ※kcal〜cは1人前あたり
   dict: {}, // key -> {name,kcal,p,f,c,source,count,updatedAt}
+  noRecord: {}, // date -> 理由（例：「帰省中」）  記録できなかった日
   pastDays: {}, // date -> {kcal,p,f,c,note}  エクセルから取り込んだ日別合計（null=未記録）
 });
 
@@ -53,6 +54,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const r0 = (n) => Math.round(n);
 const r1 = (n) => Math.round(n * 10) / 10;
+const blank0 = (n) => (n ? n : ""); // 0は空欄にして、そのまま打ち込めるようにする
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const normKey = (s) => s.normalize("NFKC").toLowerCase().replace(/[\s　・,、。]/g, "").replace(/の/g, "");
@@ -118,19 +120,23 @@ function renderSummary() {
   const macro = (key, label, color) => {
     const rem = g[key] - t[key];
     return `<div class="macro">
-      <div class="macro-head"><b>${label} ${r0(t[key])} / ${r0(g[key])}g</b>
+      <div class="macro-head"><b>${label} ${r0(t[key])} / ${r0(g[key])}g<span class="macro-pct">${g[key] > 0 ? r0((t[key] / g[key]) * 100) : 0}%</span></b>
       <span class="rem ${rem < 0 ? "over" : ""}">${rem >= 0 ? `残り ${r0(rem)}g` : `${r0(-rem)}g オーバー`}</span></div>
       <div class="bar"><i style="width:${pct(t[key], g[key])}%;background:${rem < 0 ? "var(--over)" : color}"></i></div></div>`;
   };
   $("summary").innerHTML = `
     <div class="kcal-head">
-      <div class="remain ${remain < 0 ? "over" : ""}">${remain >= 0 ? r0(remain) : r0(-remain)}<small> kcal ${remain >= 0 ? "残り" : "オーバー"}</small></div>
-      <div class="hint" style="margin:0">${r0(t.kcal)} / ${r0(g.kcal)} kcal</div>
+      <div class="eaten"><span class="eaten-label">摂取</span>${r0(t.kcal)}<small> / ${r0(g.kcal)} kcal</small><span class="macro-pct kcal-pct">${g.kcal > 0 ? r0((t.kcal / g.kcal) * 100) : 0}%</span></div>
+      <div class="remain ${remain < 0 ? "over" : ""}"><span class="remain-label">${remain >= 0 ? "残り" : "オーバー"}</span>${r0(Math.abs(remain))}<small> kcal</small></div>
     </div>
     <div class="bar"><i style="width:${pct(t.kcal, g.kcal)}%;background:${remain < 0 ? "var(--over)" : "var(--kcal)"}"></i></div>
-    ${macro("p", "P たんぱく質", "var(--p)")}
+    ${state.noRecord[currentDate] != null
+      ? `<button type="button" class="norec-block" id="noRecEdit" aria-label="記録なしの理由を変更">
+          <span class="norec-reason">${esc(state.noRecord[currentDate])}</span><span class="norec-sub">により記録なし</span></button>`
+      : `${macro("p", "P たんぱく質", "var(--p)")}
     ${macro("f", "F 脂質", "var(--f)")}
     ${macro("c", "C 炭水化物", "var(--c)")}
+    <div class="norec-row"><button type="button" class="norec-btn" id="noRecOpen">記録なしにする</button></div>`}
     ${t0.past ? `<p class="note">この日はエクセルから取り込んだ合計です${t0.note ? `（${esc(t0.note)}）` : ""}。空欄の項目は0として表示しています。</p>` : ""}`;
 }
 
@@ -170,21 +176,22 @@ function renderCandidate(extra = "") {
   box.innerHTML = `<div class="cand">
     <div><b>この内容で記録しますか？</b><span class="badge ${source === "ai" || source === "photo" ? "ai" : ""}">${SOURCE_LABEL[source]}</span></div>
     ${candidates.photoUrls?.length ? `<div class="thumbs">${candidates.photoUrls.map((u) => `<img src="${u}" alt="送った写真">`).join("")}</div>` : ""}
-    <p class="note">数値は「1人前」あたりです。違っていたら直してから記録してください。</p>
+    <p class="note">数値は「量」に合わせた合計です。量を変えると自動で計算し直します。違っていたら直してから記録してください。</p>
     ${items.map((it, i) => `<div class="cand-item" data-i="${i}">
       <div class="cand-name-row">
         <input class="name-input" data-k="name" value="${esc(it.name)}">
         ${items.length > 1 ? `<button type="button" class="cand-rm" data-rm-item="${i}" aria-label="${esc(it.name)}を記録しない">×</button>` : ""}
       </div>
       <div class="row four">
-        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${r0(it.kcal)}"></label>
-        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${r1(it.p)}"></label>
-        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${r1(it.f)}"></label>
-        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${r1(it.c)}"></label>
+        <label class="field"><span>kcal</span><input data-k="kcal" type="number" inputmode="decimal" step="any" value="${blank0(r0(it.kcal * it.qty))}"></label>
+        <label class="field"><span>P</span><input data-k="p" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.p * it.qty))}"></label>
+        <label class="field"><span>F</span><input data-k="f" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.f * it.qty))}"></label>
+        <label class="field"><span>C</span><input data-k="c" type="number" inputmode="decimal" step="any" value="${blank0(r1(it.c * it.qty))}"></label>
       </div>
       <label class="field qty"><span>量（人前）</span><input data-k="qty" type="number" inputmode="decimal" step="0.1" min="0.1" value="${it.qty}"></label>
     </div>`).join("")}
     ${note ? `<p class="note">メモ：${esc(note)}</p>` : ""}
+    ${source === "manual" ? `<button type="button" id="candKcalCalc" class="kcal-calc">P・F・Cからkcalを計算</button>` : ""}
     <div class="row">
       <button type="button" id="candCancel">やめる</button>
       ${source === "dict" ? `<button type="button" id="candAI">AIで計算し直す</button>` : ""}
@@ -356,7 +363,7 @@ async function calculate(text, qty, forceAI = false) {
 
 function showError(e) {
     renderCandidate(`<p class="error">${esc(e.message)}</p>
-      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">数値を手入力する</button>`);
+      <button type="button" id="manualBtn" style="width:100%;margin-top:8px">下の欄に数値を自分で入れる</button>`);
 }
 
 // 送る前に貯めておく写真（1回の食事ぶん）
@@ -404,15 +411,32 @@ async function calculateFromPhotos() {
   }
 }
 
+// 候補の it.kcal〜it.c は常に「1人前あたり」で持ち、画面には「量」をかけた合計を出す。
+// 数値欄の変更は入力のたびに1人前あたりへ戻して it に入れる（下の input イベント）。
 function readCandidateInputs() {
   document.querySelectorAll("#candidate .cand-item").forEach((el) => {
     const it = candidates.items[+el.dataset.i];
-    el.querySelectorAll("input").forEach((inp) => {
-      const k = inp.dataset.k;
-      it[k] = k === "name" ? inp.value.trim() : num(inp.value);
-    });
+    it.name = el.querySelector('input[data-k="name"]').value.trim();
+    it.qty = num(el.querySelector('input[data-k="qty"]').value) || it.qty || 1;
   });
 }
+$("candidate").addEventListener("input", (e) => {
+  const inp = e.target;
+  const el = inp.closest(".cand-item");
+  if (!el || !candidates) return;
+  const it = candidates.items[+el.dataset.i];
+  const k = inp.dataset.k;
+  if (k === "qty") {
+    const q = num(inp.value);
+    if (q <= 0) return; // 入力途中（空欄など）は何もしない
+    it.qty = q;
+    for (const m of ["kcal", "p", "f", "c"]) {
+      el.querySelector(`input[data-k="${m}"]`).value = m === "kcal" ? r0(it[m] * q) : r1(it[m] * q);
+    }
+  } else if (["kcal", "p", "f", "c"].includes(k)) {
+    it[k] = num(inp.value) / (it.qty || 1);
+  }
+});
 
 function upsertDict(item, source, inputText) {
   const entry = {
@@ -428,8 +452,40 @@ function upsertDict(item, source, inputText) {
   }
 }
 
+// 自分で数値を入れて記録する（写真の下の入力欄）
+function openManualEntry() {
+  candidates = null;
+  renderCandidate();
+  $("manualBox").scrollIntoView({ block: "center", behavior: "smooth" });
+  $("mKcal").focus();
+}
+function manualPfcToKcal() {
+  const total = num($("mP").value) * 4 + num($("mF").value) * 9 + num($("mC").value) * 4;
+  $("mKcal").value = total ? r0(total) : "";
+}
+function saveManualInline() {
+  const name = $("foodInput").value.trim();
+  if (!name) { alert("上の「食べたもの」にメニュー名を入れてください。"); $("foodInput").focus(); return; }
+  const vals = { kcal: num($("mKcal").value), p: num($("mP").value), f: num($("mF").value), c: num($("mC").value) };
+  if (!vals.kcal && (vals.p || vals.f || vals.c)) vals.kcal = vals.p * 4 + vals.f * 9 + vals.c * 4; // kcalが空ならPFCから
+  if (!vals.kcal) { alert("kcal か P・F・C のどれかを入れてください。"); $("mKcal").focus(); return; }
+  const qty = num($("qtyInput").value) || 1;
+  // 入力した数値は「量」ぶんの合計として扱い、1人前あたりにして保存する
+  const it = { name, qty, kcal: vals.kcal / qty, p: vals.p / qty, f: vals.f / qty, c: vals.c / qty };
+  state.entries.push({ id: uid(), date: currentDate, meal: currentMeal, ...it, source: "manual", createdAt: Date.now() });
+  upsertDict(it, "manual", null);
+  save();
+  for (const id of ["mKcal", "mP", "mF", "mC"]) $(id).value = "";
+  $("foodInput").value = "";
+  $("qtyInput").value = "1";
+  candidates = null;
+  renderCandidate();
+  renderToday();
+}
+
 function saveCandidates() {
   readCandidateInputs();
+  if (candidates.items.some((it) => !it.name)) { alert("メニュー名を入れてください。"); return; }
   const text = $("foodInput").value.trim();
   const single = candidates.items.length === 1;
   for (const it of candidates.items) {
@@ -533,7 +589,10 @@ function dailyBars(dayList, g) {
   const bars = dayList.map((d, i) => {
     const v = vals[i];
     const md = d.slice(5).replace("-", "/").replace(/^0/, "");
-    if (v == null) return `<button class="db-bar" data-tip="${md} 記録なし"><i class="db-none"></i></button>`;
+    if (v == null) {
+      const reason = state.noRecord[dayList[i]];
+      return `<button class="db-bar" data-tip="${md} ${reason != null ? esc(reason) + "により記録なし" : "記録なし"}"><i class="db-none ${reason != null ? "db-norec" : ""}"></i></button>`;
+    }
     const isOver = v > g.kcal * 1.05;
     isOver ? over++ : ok++;
     const diff = v - g.kcal;
@@ -571,7 +630,7 @@ function avgBlock(title, n) {
     <p class="gb-note">基準：カロリー・脂質・炭水化物は目標の105%を超えたら「超過」、たんぱく質は目標の90%未満で「不足」</p></div>`;
 }
 function renderHistory() {
-  const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays)])].sort().reverse();
+  const dates = [...new Set([...state.entries.map((e) => e.date), ...Object.keys(state.pastDays), ...Object.keys(state.noRecord)])].sort().reverse();
   if (!dates.length) { $("historyList").innerHTML = `<p class="empty">まだ記録がありません</p>`; $("historyAvg").innerHTML = ""; return; }
   const t = todayStr();
   const within = (n) => dates.filter((d) => d < t && d >= shiftDate(t, -n));
@@ -579,6 +638,12 @@ function renderHistory() {
   const g = goalGrams();
   $("historyList").innerHTML = dates.map((d) => {
     const x = totalsFor(d);
+    const reason = state.noRecord[d];
+    if (reason != null && dayTotal(d) == null) {
+      return `<div class="hist-row"><button data-date="${d}"><b>${dateLabel(d)}</b><br>
+        <small class="hint">${esc(reason)}により記録なし</small></button>
+        <div style="text-align:right"><span class="badge norec-badge">記録なし</span></div></div>`;
+    }
     const diff = x.kcal == null ? null : x.kcal - g.kcal;
     return `<div class="hist-row"><button data-date="${d}">
         <b>${dateLabel(d)}</b>${x.past ? `<span class="badge">取込</span>` : ""}<br>
@@ -643,16 +708,54 @@ function exportCsv() {
 function showView(name) {
   for (const v of ["today", "history", "settings"]) $("view-" + v).hidden = v !== name;
   document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
-  document.querySelector(".topbar").style.visibility = name === "today" ? "visible" : "hidden";
+  // 上のバーは常に表示。今日以外の画面では矢印を隠して画面名を出す
+  const isToday = name === "today";
+  $("prevDay").style.visibility = $("nextDay").style.visibility = isToday ? "visible" : "hidden";
+  $("dateLabel").disabled = !isToday;
+  if (!isToday) $("dateLabel").textContent = name === "history" ? "履歴" : "設定";
   if (name === "today") renderToday();
   if (name === "history") renderHistory();
   if (name === "settings") renderSettings();
-  window.scrollTo(0, 0);
+  document.querySelector("main").scrollTo(0, 0);
 }
 document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
-$("prevDay").addEventListener("click", () => { currentDate = shiftDate(currentDate, -1); renderToday(); });
-$("nextDay").addEventListener("click", () => { currentDate = shiftDate(currentDate, 1); renderToday(); });
+function goDay(delta) {
+  currentDate = shiftDate(currentDate, delta);
+  renderToday();
+  // どちらに動いたかわかるよう、少しだけ横から入ってくる動き
+  const v = $("view-today");
+  v.classList.remove("slide-l", "slide-r");
+  void v.offsetWidth;
+  v.classList.add(delta > 0 ? "slide-l" : "slide-r");
+}
+$("prevDay").addEventListener("click", () => goDay(-1));
+$("nextDay").addEventListener("click", () => goDay(1));
+
+// 左右スワイプで日付を移動（右へスワイプ＝前の日、左へスワイプ＝次の日）
+{
+  let sx = 0, sy = 0, st = 0, tracking = false;
+  const view = $("view-today");
+  view.addEventListener("touchstart", (e) => {
+    tracking = false;
+    if (e.touches.length !== 1) return;
+    // 入力欄や横に動かす要素の上では、スワイプとして扱わない
+    if (e.target.closest("input, textarea, select, .thumbs, dialog")) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    // 画面の左端からのスワイプはiPhoneの「戻る」操作とぶつかるので使わない
+    tracking = sx > 24;
+  }, { passive: true });
+  view.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Date.now() - st > 800) return; // ゆっくりした動きはスクロールとみなす
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 横方向にしっかり動いたときだけ
+    goDay(dx > 0 ? -1 : 1);
+  }, { passive: true });
+  view.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+}
 $("dateLabel").addEventListener("click", () => {
   const p = $("datePicker");
   if (p.showPicker) { try { p.showPicker(); return; } catch {} }
@@ -667,12 +770,90 @@ $("mealTabs").addEventListener("click", (e) => {
   renderMealTabs();
 });
 
+// ---------- 入力の候補（マイ辞書から） ----------
+// ひらがな・カタカナ、全角・半角、大文字・小文字、空白の違いは無視して比べる
+const foldKana = (str) => str.normalize("NFKC").toLowerCase()
+  .replace(/[\s　・]/g, "")
+  .replace(/[\u3041-\u3096]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+function suggestionsFor(q) {
+  const fq = foldKana(q);
+  if (!fq) return [];
+  const byName = new Map();
+  for (const d of Object.values(state.dict)) {
+    const prev = byName.get(d.name);
+    if (!prev || (d.count || 0) > (prev.count || 0)) byName.set(d.name, d);
+  }
+  const hits = [];
+  for (const d of byName.values()) {
+    const fn = foldKana(d.name);
+    if (fn === fq) continue; // すでに同じ名前が入っている
+    const at = fn.indexOf(fq);
+    if (at < 0) continue;
+    hits.push({ d, rank: at === 0 ? 0 : 1 }); // 先頭が同じものを上に
+  }
+  hits.sort((a, b) => a.rank - b.rank || (b.d.count || 0) - (a.d.count || 0));
+  return hits.slice(0, 8).map((h) => h.d);
+}
+function renderSuggest() {
+  const box = $("suggest");
+  const list = suggestionsFor($("foodInput").value);
+  if (!list.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.innerHTML = list.map((d) => `<button type="button" class="sg-item" data-name="${esc(d.name)}">
+      <span class="sg-name">${esc(d.name)}</span><span class="sg-kcal">${r0(d.kcal)} kcal</span></button>`).join("");
+  box.hidden = false;
+}
+$("foodInput").addEventListener("input", renderSuggest);
+$("foodInput").addEventListener("focus", renderSuggest);
+$("foodInput").addEventListener("blur", () => setTimeout(() => { $("suggest").hidden = true; }, 200));
+// pointerdown で選ぶ（キーボードが閉じて候補が消える前に拾うため）
+$("suggest").addEventListener("pointerdown", (e) => {
+  const b = e.target.closest(".sg-item");
+  if (!b) return;
+  e.preventDefault();
+  $("foodInput").value = b.dataset.name;
+  $("suggest").hidden = true;
+  $("foodInput").blur();
+  calculate(b.dataset.name, num($("qtyInput").value) || 1);
+});
+
 $("entryForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("foodInput").value.trim();
   if (!text) return;
+  $("suggest").hidden = true;
   calculate(text, num($("qtyInput").value) || 1);
 });
+
+$("manualSave").addEventListener("click", saveManualInline);
+
+// ---------- 記録なしの日 ----------
+function openNoRecord() {
+  const cur = state.noRecord[currentDate];
+  $("noRecTitle").textContent = `${dateLabel(currentDate)} を記録なしにする`;
+  $("noRecReason").value = cur ?? "";
+  $("noRecDelete").hidden = cur == null;
+  $("noRecDialog").showModal();
+  setTimeout(() => $("noRecReason").focus(), 50);
+}
+$("summary").addEventListener("click", (e) => {
+  if (e.target.closest("#noRecOpen, #noRecEdit")) openNoRecord();
+});
+$("noRecReason").addEventListener("input", () => {
+  $("noRecPreview").textContent = ($("noRecReason").value.trim() || "（理由）") + "により記録なし";
+});
+$("noRecDialog").addEventListener("close", () => {
+  const action = $("noRecDialog").returnValue;
+  if (action === "save") {
+    const reason = $("noRecReason").value.trim();
+    if (!reason) { alert("理由を入れてください（例：帰省中）"); return; }
+    state.noRecord[currentDate] = reason;
+  } else if (action === "delete") {
+    delete state.noRecord[currentDate];
+  } else return;
+  save();
+  renderToday();
+});
+$("manualKcalCalc").addEventListener("click", manualPfcToKcal);
 
 $("photoInput").addEventListener("change", async (e) => {
   const input = e.target;
@@ -704,9 +885,16 @@ $("candidate").addEventListener("click", (e) => {
   if (id === "candCancel") { candidates = null; renderCandidate(); }
   if (id === "candSave") saveCandidates();
   if (id === "candAI") { calculate($("foodInput").value.trim(), num($("qtyInput").value) || 1, true); }
-  if (id === "manualBtn") {
-    candidates = { source: "manual", note: "", items: [{ name: $("foodInput").value.trim(), kcal: 0, p: 0, f: 0, c: 0, qty: num($("qtyInput").value) || 1 }] };
-    renderCandidate();
+  if (id === "manualBtn") openManualEntry();
+  if (id === "candKcalCalc") {
+    // たんぱく質・炭水化物は1gあたり4kcal、脂質は9kcalで計算
+    document.querySelectorAll("#candidate .cand-item").forEach((el) => {
+      const it = candidates.items[+el.dataset.i];
+      const v = (k) => num(el.querySelector(`input[data-k="${k}"]`).value);
+      const total = v("p") * 4 + v("f") * 9 + v("c") * 4;
+      el.querySelector('input[data-k="kcal"]').value = r0(total);
+      it.kcal = total / (it.qty || 1);
+    });
   }
 });
 
@@ -865,6 +1053,13 @@ $("importJson").addEventListener("change", async (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !$("view-today").hidden) renderToday();
 });
+
+// 画面の拡大を止める（ダブルタップ・2本指での拡大）
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+}
+document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 // 予期しないエラーを画面に出す（スマホでは原因がわかりにくいため）
 window.addEventListener("error", (e) => alert("エラー：" + (e.message || e.error)));

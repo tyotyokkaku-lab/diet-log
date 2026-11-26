@@ -50,7 +50,8 @@ h3 { margin: 0 0 12px; }
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; justify-content: space-between;
   background: var(--accent); color: #fff;
-  padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
+  /* iPhoneは画面の一番上の近くを自動で薄くするので、日付をその範囲より少し下に置く */
+  padding: calc(22px + env(safe-area-inset-top)) 8px 6px;
 }
 .topbar button { background: none; border: none; color: #fff; }
 .icon-btn { font-size: 1.8rem; width: 48px; height: 44px; line-height: 1; }
@@ -215,3 +216,72 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .db-tip { margin: 4px 0 0; min-height: 1.4em; }
 .gb-note { font-size: .72rem; color: var(--muted); margin: 10px 0 0; }
 .avg-grid > div { font-size: .74rem; }
+
+/* 日付移動のときの動き */
+@keyframes slideFromRight { from { transform: translateX(28px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes slideFromLeft { from { transform: translateX(-28px); opacity: .4; } to { transform: none; opacity: 1; } }
+.view.slide-l { animation: slideFromRight .2s ease-out; }
+.view.slide-r { animation: slideFromLeft .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .view.slide-l, .view.slide-r { animation: none; } }
+html, body { overflow-x: hidden; }
+
+/* 画面の固定：上の日付バーと下のタブは動かさず、真ん中だけをスクロールさせる
+   （iPhoneで下に引っ張ったとき、日付バーごと落ちてこないように） */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding-bottom: 0; }
+.topbar { position: relative; flex: 0 0 auto; }
+main {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+  max-width: none; margin: 0;
+  padding: 8px max(12px, calc((100% - 536px) / 2)) 16px;
+}
+.tabbar { position: relative; flex: 0 0 auto; }
+.date-btn:disabled { opacity: 1; cursor: default; }
+
+/* 画面の一番上（時計の裏）まで濃い緑で塗る。真ん中のスクロール部分だけ明るい背景 */
+html, body { background: var(--accent); }
+main { background: var(--bg); }
+.tabbar { background: var(--card); }
+
+/* ダブルタップでの拡大をしない（スクロールはできる） */
+html, body, * { touch-action: pan-x pan-y; }
+/* iPhoneは16px未満の入力欄をタップすると自動で拡大するので、入力欄はすべて16px以上 */
+input, select, textarea, .paste-box textarea { font-size: 16px; }
+
+/* 今日のカロリー：摂取（大）と残り（中）を並べる */
+.summary .kcal-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
+.summary .eaten { font-size: 2.4rem; font-weight: 700; line-height: 1.05; }
+.summary .eaten small { font-size: .9rem; font-weight: 500; color: var(--muted); }
+.summary .eaten-label, .summary .remain-label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); line-height: 1.4; }
+.summary .remain { font-size: 1.5rem; font-weight: 700; line-height: 1.1; text-align: right; color: var(--kcal); }
+.summary .remain small { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.summary .remain.over, .summary .remain.over .remain-label { color: var(--over); }
+.macro-pct { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); font-size: .78rem; font-weight: 600; line-height: 1.6; vertical-align: 2px; }
+.summary .eaten .kcal-pct { font-size: .85rem; vertical-align: 4px; color: var(--text); }
+.manual-btn { display: block; width: 100%; margin-top: 8px; background: none; color: var(--accent); font-weight: 600; }
+.kcal-calc { display: block; width: 100%; margin: 4px 0 10px; }
+
+/* 入力の候補 */
+.suggest { margin: -4px 0 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+.sg-item { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: none; border-radius: 0; border-top: 1px solid var(--line); background: none; text-align: left; padding: 10px 12px; min-height: 44px; }
+.sg-item:first-child { border-top: none; }
+.sg-item:active { background: var(--accent-soft); }
+.sg-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sg-kcal { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+
+/* 数値の直接入力欄 */
+.manual-box { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.manual-title { font-size: .85rem; font-weight: 600; margin-bottom: 8px; }
+.manual-box input { background: var(--card); }
+
+/* 記録なしの日 */
+.norec-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+.norec-btn { min-height: 32px; padding: 4px 12px; font-size: .8rem; color: var(--muted); border-radius: 99px; }
+.norec-block { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 12px; padding: 22px 12px; border: none; border-radius: 10px; background: var(--line); color: var(--text); }
+.norec-reason { font-size: 2.6rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; text-align: center; }
+.norec-sub { font-size: 1.6rem; font-weight: 600; line-height: 1.3; }
+.db-bar .db-norec { background: var(--muted); opacity: .5; }
+.norec-badge { background: var(--line); color: var(--muted); }

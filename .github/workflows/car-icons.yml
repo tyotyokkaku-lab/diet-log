@@ -1,0 +1,27 @@
+# car/icon-1024.png を差し替えると、180/192/512 のアイコンを自動で作り直してコミットする
+name: 社用車アプリのアイコンを作る
+on:
+  push:
+    paths:
+      - "car/icon-1024.png"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow
+      - run: python car/tools/make_icons.py
+      - name: できたアイコンをコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add car/icon-180.png car/icon-192.png car/icon-512.png
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git commit -m "社用車アプリのアイコンを icon-1024.png から作り直し"
+          git push
