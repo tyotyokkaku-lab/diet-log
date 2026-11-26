@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-18c";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-26a";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-18c";
+const APP_VERSION = "2026-11-26a";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -49,26 +49,28 @@ const OFF_WORD = /^(休|休み|公休|有給|有休|希望休|OFF|オフ|×)$/i;
 function typesFromShifts(p) {
   const by = {};
   for (const e of Object.values(state.shifts[p])) {
-    if (e.type !== "work" || !e.label || OFF_WORD.test(e.label)) continue;
-    const k = `${e.start}|${e.end}`;
+    if ((e.type !== "work" && e.type !== "plan") || !e.label || OFF_WORD.test(e.label)) continue;
+    const k = `${e.start}|${e.end}|${e.type}`;
     ((by[e.label] ||= {})[k] = (by[e.label][k] || 0) + 1);
   }
   for (const [label, times] of Object.entries(by)) {
     if (state.types[p][label]) continue;
-    const [start, end] = Object.entries(times).sort((a, b) => b[1] - a[1])[0][0].split("|");
-    state.types[p][label] = { start, end, u: 1 };
+    const [start, end, kind] = Object.entries(times).sort((a, b) => b[1] - a[1])[0][0].split("|");
+    state.types[p][label] = { start, end, u: 1, ...(kind === "plan" ? { kind: "plan" } : {}) };
   }
 }
 for (const p of ["him", "her"]) typesFromShifts(p);
-function ensureType(p, label, start, end) {
+// 一度入れた名前を「シフトの種類」に覚える（kind: 仕事 "work" か 予定 "plan"）
+function ensureType(p, label, start, end, kind = "work") {
   if (!label || OFF_WORD.test(label)) return;
   const t = state.types[p][label];
-  if (!t || t.del) state.types[p][label] = { start: start || "", end: end || "", u: Date.now() };
+  if (!t || t.del) state.types[p][label] = { start: start || "", end: end || "", u: Date.now(), ...(kind === "plan" ? { kind: "plan" } : {}) };
 }
-function typeList(p) {
+const typeKind = (t) => (t?.kind === "plan" ? "plan" : "work");
+function typeList(p, kind = null) {
   const count = {};
-  for (const e of Object.values(state.shifts[p])) if (e.type === "work" && e.label) count[e.label] = (count[e.label] || 0) + 1;
-  return Object.entries(state.types[p]).filter(([, t]) => !t.del)
+  for (const e of Object.values(state.shifts[p])) if ((e.type === "work" || e.type === "plan") && e.label) count[e.label] = (count[e.label] || 0) + 1;
+  return Object.entries(state.types[p]).filter(([, t]) => !t.del && (!kind || typeKind(t) === kind))
     .sort((a, b) => (count[b[0]] || 0) - (count[a[0]] || 0) || a[0].localeCompare(b[0], "ja"))
     .map(([label, t]) => ({ label, ...t }));
 }
@@ -172,7 +174,7 @@ const bothOff = (date) => getShift("him", date)?.type === "off" && getShift("her
 
 function typeBtnHtml(t, attrs = "") {
   const time = t.start || t.end ? `${hm(t.start)}〜${hm(t.end)}` : "";
-  return `<button type="button" class="type-btn" style="--pc:${pillColor(t.label)}" ${attrs}><b>${esc(t.label)}</b>${time ? `<small>${esc(time)}</small>` : ""}</button>`;
+  return `<button type="button" class="type-btn ${typeKind(t) === "plan" ? "plan" : ""}" style="--pc:${pillColor(t.label)}" ${attrs}><b>${esc(t.label)}</b>${time ? `<small>${esc(time)}</small>` : ""}</button>`;
 }
 function renderTypes(p) {
   const list = typeList(p);
@@ -309,7 +311,7 @@ function updateColorField() {
 }
 $("dLabel").addEventListener("input", updateColorField);
 function renderQuick() {
-  const list = editing.type === "work" ? typeList(editing.who) : [];
+  const list = editing.type === "work" || editing.type === "plan" ? typeList(editing.who, editing.type) : [];
   $("dQuick").hidden = !list.length;
   const cur = $("dLabel").value.trim();
   $("dQuick").innerHTML = list.map((t) => typeBtnHtml(t, `data-q="${esc(t.label)}" aria-pressed="${t.label === cur}"`)).join("");
@@ -359,7 +361,7 @@ $("dayDialog").addEventListener("close", () => {
   if (!isOff && editing.type !== "none" && label && $("dColor").value.toLowerCase() !== pillColor(label).toLowerCase()) {
     state.labelColors[label] = $("dColor").value.toLowerCase();
   }
-  if (editing.type === "work") ensureType(editing.who, label, $("dStart").value, $("dEnd").value);
+  if (editing.type === "work" || editing.type === "plan") ensureType(editing.who, label, $("dStart").value, $("dEnd").value, editing.type);
   save();
   render();
 });
@@ -548,7 +550,7 @@ $("ocrResult").addEventListener("click", (ev) => {
     setShift(ocr.who, e.date, { ...e, note: "" });
     // 元のアプリの色を引き継ぐ。ただし一度決まったシフト名の色は変えない（同じ名前は同じ色に固定）
     if (e.label && e.type !== "off" && e.color && !isHex(state.labelColors[e.label]) && !PRESET_COLORS[e.label] && !FIXED_COLORS[e.label]) state.labelColors[e.label] = e.color;
-    if (e.type === "work") ensureType(ocr.who, e.label, e.start, e.end);
+    if (e.type === "work" || e.type === "plan") ensureType(ocr.who, e.label, e.start, e.end, e.type);
   }
   save();
   // 入れた予定の月を表示する
@@ -580,7 +582,7 @@ $("ocrBtn").addEventListener("click", async () => {
 function isWorkLabel(label) {
   if (!label || OFF_WORD.test(label)) return false;
   if (FIXED_COLORS[label] || PRESET_COLORS[label]) return true;
-  return PEOPLE.some((p) => state.types[p][label] && !state.types[p][label].del);
+  return PEOPLE.some((p) => state.types[p][label] && !state.types[p][label].del && typeKind(state.types[p][label]) === "work");
 }
 // 休みとして入ってしまったシフト名（例：明け）を仕事に直す。同じ名前はいつも同じ見た目にするため
 function fixOffLabels() {
@@ -605,6 +607,7 @@ function openType(label) {
   const t = label ? state.types[who][label] : null;
   $("tTitle").textContent = label ? `${nm(who)}のシフト「${label}」` : `${nm(who)}のシフトを追加`;
   $("tName").value = label;
+  $("tKind").value = typeKind(t);
   $("tStart").value = t?.start || "";
   $("tEnd").value = t?.end || "";
   $("tColor").value = label ? pillColor(label) : "#3f95e0";
@@ -635,12 +638,12 @@ $("typeDialog").addEventListener("close", () => {
   const start = $("tStart").value, end = $("tEnd").value;
   // この種類が入っている日をまとめて直す（名前を変えたとき、時間を変えたとき）
   for (const [date, e] of Object.entries(state.shifts[who])) {
-    if (!old || e.type !== "work" || e.label !== old) continue;
+    if (!old || e.type !== typeKind(prev) || e.label !== old) continue;
     const sameTime = !prev || (e.start === prev.start && e.end === prev.end) || (!e.start && !e.end);
-    state.shifts[who][date] = { ...e, label: name, start: sameTime ? start : e.start, end: sameTime ? end : e.end, u: now };
+    state.shifts[who][date] = { ...e, type: $("tKind").value, label: name, start: sameTime ? start : e.start, end: sameTime ? end : e.end, u: now };
   }
   if (old && old !== name) state.types[who][old] = { ...prev, del: true, u: now };
-  state.types[who][name] = { start, end, u: now };
+  state.types[who][name] = { start, end, u: now, ...($("tKind").value === "plan" ? { kind: "plan" } : {}) };
   state.labelColors[name] = $("tColor").value.toLowerCase();
   save(); render();
 });
@@ -761,7 +764,7 @@ function applyRemote(data) {
     for (const [label, t] of Object.entries(data.types?.[p] || {})) {
       if (!t || typeof t !== "object") continue;
       const mine = state.types[p][label];
-      if (!mine || (t.u || 0) > (mine.u || 0)) state.types[p][label] = { start: String(t.start || ""), end: String(t.end || ""), u: t.u || 0, ...(t.del ? { del: true } : {}) };
+      if (!mine || (t.u || 0) > (mine.u || 0)) state.types[p][label] = { start: String(t.start || ""), end: String(t.end || ""), u: t.u || 0, ...(t.kind === "plan" ? { kind: "plan" } : {}), ...(t.del ? { del: true } : {}) };
     }
     if (data.names?.[p]) state.names[p] = String(data.names[p]).slice(0, 20);
   }

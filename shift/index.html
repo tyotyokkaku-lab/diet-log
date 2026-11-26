@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-18c">
+  <link rel="stylesheet" href="style.css?v=2026-11-26a">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -30,7 +30,7 @@
 
       <div class="card">
         <h2>シフトの種類</h2>
-        <p class="hint">タップすると名前・色・時間を変えられます。日にちを入れるときに、ここの種類をボタンで選べます。</p>
+        <p class="hint">一度入れた仕事・予定の名前がここに増えていきます。タップすると名前・色・時間を変えられ、日にちを入れるときにボタンで選べます。</p>
         <div class="type-list" id="typeList"></div>
       </div>
 
@@ -152,6 +152,7 @@
     <form method="dialog">
       <h3 id="tTitle"></h3>
       <label class="field"><span>名前</span><input id="tName" maxlength="12" placeholder="例：遅番"></label>
+      <label class="field"><span>種類</span><select id="tKind"><option value="work">仕事</option><option value="plan">予定</option></select></label>
       <div class="row">
         <label class="field"><span>開始</span><input id="tStart" type="time"></label>
         <label class="field"><span>終了</span><input id="tEnd" type="time"></label>
@@ -167,6 +168,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-18c"></script>
+  <script type="module" src="app.js?v=2026-11-26a"></script>
 </body>
 </html>

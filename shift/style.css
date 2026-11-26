@@ -270,3 +270,5 @@ dialog .row .field { min-width: 0; }
 .slide-l { animation: slideL .22s ease-out; }
 .slide-r { animation: slideR .22s ease-out; }
 #personCal, #usCal { touch-action: pan-y; }
+
+.type-btn.plan { background: var(--card); color: var(--pc); box-shadow: inset 0 0 0 2px var(--pc); }
