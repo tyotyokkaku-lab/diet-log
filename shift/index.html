@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ふたりのシフト">
-  <link rel="stylesheet" href="style.css?v=2026-11-26a">
+  <link rel="stylesheet" href="style.css?v=2026-11-26b">
 </head>
 <body data-view="us">
   <header class="topbar">
@@ -57,6 +57,7 @@
             <span><i class="sw both-off"></i>2人とも休み</span>
             <span><b class="ox-key">○</b>行ける<b class="ox-key ng">✕</b>無理</span>
             <span><b class="heart-key">♡</b>2人とも○</span>
+            <span><i class="extra-key"></i>もう1つ予定あり</span>
           </div>
           <div class="mode-seg" id="usMode" aria-label="表示">
             <button type="button" data-mode="name">シフト名</button><button type="button" data-mode="time">時間</button>
@@ -139,6 +140,17 @@
         </div>
         <label class="field color-field" id="dColorField"><span>この名前の色（同じ名前の日すべてに反映）</span><input id="dColor" type="color"></label>
       </div>
+      <button type="button" class="extra-add" id="dExtraAdd">＋ もう1つ予定を追加</button>
+      <div class="extra-box" id="dExtraBox" hidden>
+        <div class="extra-head"><b>もう1つの予定</b><button type="button" class="danger" id="dExtraDel">消す</button></div>
+        <div class="seg" id="xType" role="radiogroup" aria-label="2つ目の種類"></div>
+        <div class="quick" id="xQuick" hidden></div>
+        <label class="field"><span>名前</span><input id="xLabel" placeholder="例：飲み会 / 待機"></label>
+        <div class="row">
+          <label class="field"><span>開始</span><input id="xStart" type="time"></label>
+          <label class="field"><span>終了</span><input id="xEnd" type="time"></label>
+        </div>
+      </div>
       <label class="field"><span>メモ（任意）</span><input id="dNote"></label>
       <div class="row">
         <button value="cancel" formnovalidate>キャンセル</button>
@@ -168,6 +180,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-26a"></script>
+  <script type="module" src="app.js?v=2026-11-26b"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 import Anthropic from "../vendor/anthropic-sdk-1.3.0.js";
-import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-26a";
+import { syncConfigured, startSync, stopSync, pushDiff } from "./sync.js?v=2026-11-26b";
 
 // ---------- 定数 ----------
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "shiftcal.v1";
 const KEY_KEY = "shiftcal.apiKey";
 const DIET_KEY_KEY = "dietlog.apiKey"; // 同じサイトの食事ログに入れたキーも使えるように
-const APP_VERSION = "2026-11-26a";
+const APP_VERSION = "2026-11-26b";
 const PEOPLE = ["him", "her"];
 const TYPES = [
   { id: "off", label: "休み" },
@@ -48,7 +48,8 @@ const OFF_WORD = /^(休|休み|公休|有給|有休|希望休|OFF|オフ|×)$/i;
 // これまでに入っているシフトから「シフトの種類」を作る（よく使われている時間をその種類の時間にする）
 function typesFromShifts(p) {
   const by = {};
-  for (const e of Object.values(state.shifts[p])) {
+  const all = Object.values(state.shifts[p]).flatMap((e) => (e.extra ? [e, e.extra] : [e]));
+  for (const e of all) {
     if ((e.type !== "work" && e.type !== "plan") || !e.label || OFF_WORD.test(e.label)) continue;
     const k = `${e.start}|${e.end}|${e.type}`;
     ((by[e.label] ||= {})[k] = (by[e.label][k] || 0) + 1);
@@ -106,8 +107,15 @@ function getShift(p, date) {
   const e = state.shifts[p][date];
   return e && e.type !== "none" ? e : null;
 }
+// 2つ目の予定を整える（名前も時間もなければ「なし」）
+function cleanExtra(x) {
+  if (!x || typeof x !== "object") return null;
+  const v = { type: x.type === "work" ? "work" : "plan", label: String(x.label || "").slice(0, 20), start: String(x.start || ""), end: String(x.end || "") };
+  return v.label || v.start || v.end ? v : null;
+}
 function setShift(p, date, e) {
-  state.shifts[p][date] = { type: e.type, label: e.label || "", start: e.start || "", end: e.end || "", note: e.note || "", u: Date.now() };
+  const extra = e.type === "none" ? null : cleanExtra(e.extra);
+  state.shifts[p][date] = { type: e.type, label: e.label || "", start: e.start || "", end: e.end || "", note: e.note || "", ...(extra ? { extra } : {}), u: Date.now() };
 }
 
 const getAvail = (p, date) => state.avail[p][date]?.v || "";
@@ -127,20 +135,28 @@ function timeText(e) {
 }
 function chipHtml(e) {
   if (!e) return `<span class="chip empty">–</span>`;
-  if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休み")}</span>`;
+  if (e.type === "off") return `<span class="chip off">${esc(e.label && e.label.length <= 3 ? e.label : "休み")}</span>` + extraChipHtml(e);
   const main = e.label || (e.type === "work" ? (timeText(e) ? "" : "仕事") : "予定");
   const t = timeText(e);
   // ふたりタブと同じ色（シフト名ごとの色）
   // 名前が長いときは文字を小さくして全部見えるようにする（全角1文字=1、半角=0.55で数える）
   const w = [...(main || "")].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 0.55 : 1), 0);
   const fit = w <= 3 ? "" : w <= 4 ? "fit4" : w <= 5 ? "fit5" : "fit6";
-  return `<span class="chip ${e.type}" style="--pc:${pillColor(e.label || t || e.type)}">${main ? `<b class="${fit}">${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>`;
+  return `<span class="chip ${e.type}" style="--pc:${pillColor(e.label || t || e.type)}">${main ? `<b class="${fit}">${esc(main)}</b>` : ""}${t ? `<small>${esc(t)}</small>` : ""}</span>` + extraChipHtml(e);
+}
+// 2つ目の予定（カレンダーでは小さく下に出す）
+function extraChipHtml(e) {
+  const x = e?.extra;
+  if (!x) return "";
+  const text = x.label || timeText(x) || "予定";
+  return `<span class="chip2 ${x.type}" style="--pc:${pillColor(x.label || timeText(x) || x.type)}">${esc(text)}</span>`;
 }
 function describe(e) {
   if (!e) return "未設定";
   const t = timeText(e);
   const base = e.type === "off" ? (e.label || "休み") : (e.label || (e.type === "work" ? "仕事" : "予定"));
-  return [base, t].filter(Boolean).join(" ") + (e.note ? `（${e.note}）` : "");
+  const x = e.extra ? ` ＋ ${[e.extra.label || (e.extra.type === "work" ? "仕事" : "予定"), timeText(e.extra)].filter(Boolean).join(" ")}` : "";
+  return [base, t].filter(Boolean).join(" ") + x + (e.note ? `（${e.note}）` : "");
 }
 
 // ---------- 表示中の月・画面 ----------
@@ -215,6 +231,13 @@ function pillColor(key) {
 }
 let usMode = (() => { try { return localStorage.getItem("shiftcal.usMode") || "name"; } catch { return "name"; } })();
 function pillHtml(e) {
+  const p = pillMain(e);
+  if (!e?.extra) return p;
+  const x = e.extra;
+  const tip = [x.label || "予定", timeText(x)].filter(Boolean).join(" ");
+  return `<span class="pill-wrap">${p}<i class="extra-dot ${x.type}" style="--pc:${pillColor(x.label || timeText(x) || x.type)}" title="${esc(tip)}" aria-label="もう1つの予定：${esc(tip)}"></i></span>`;
+}
+function pillMain(e) {
   if (!e) return `<span class="pill none">–</span>`;
   if (e.type === "off") return `<span class="pill off">${esc(e.label && e.label.length <= 3 ? e.label : "休み")}</span>`;
   const t = e.start || e.end ? `${hm(e.start)}〜${hm(e.end)}` : "";
@@ -297,10 +320,54 @@ function fillDayForm() {
   $("dStart").value = e?.start || "";
   $("dEnd").value = e?.end || "";
   $("dNote").value = e?.note || "";
+  editing.extra = e?.extra ? { ...e.extra } : null;
+  fillExtra();
   updateColorField();
   document.querySelectorAll("#dWho button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.who === editing.who));
   renderTypeSeg();
 }
+// ---- 2つ目の予定 ----
+function fillExtra() {
+  const x = editing.extra;
+  $("dExtraBox").hidden = !x;
+  $("dExtraAdd").hidden = !!x || editing.type === "none";
+  if (!x) return;
+  $("xLabel").value = x.label || "";
+  $("xStart").value = x.start || "";
+  $("xEnd").value = x.end || "";
+  renderExtraSeg();
+}
+function renderExtraSeg() {
+  const x = editing.extra;
+  $("xType").innerHTML = [["plan", "予定"], ["work", "仕事"]].map(([id, l]) =>
+    `<button type="button" data-xt="${id}" aria-checked="${x.type === id}" class="t-${id}">${l}</button>`).join("");
+  const cur = $("xLabel").value.trim();
+  const list = typeList(editing.who, x.type);
+  $("xQuick").hidden = !list.length;
+  $("xQuick").innerHTML = list.map((t) => typeBtnHtml(t, `data-xq="${esc(t.label)}" aria-pressed="${t.label === cur}"`)).join("");
+}
+function readExtra() {
+  if (!editing.extra) return null;
+  return cleanExtra({ type: editing.extra.type, label: $("xLabel").value.trim(), start: $("xStart").value, end: $("xEnd").value });
+}
+$("dExtraAdd").addEventListener("click", () => { editing.extra = { type: "plan", label: "", start: "", end: "" }; fillExtra(); $("xLabel").focus(); });
+$("dExtraDel").addEventListener("click", () => { editing.extra = null; fillExtra(); });
+$("xType").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-xt]");
+  if (!b) return;
+  editing.extra.type = b.dataset.xt;
+  renderExtraSeg();
+});
+$("xQuick").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-xq]");
+  if (!b) return;
+  const t = state.types[editing.who][b.dataset.xq];
+  $("xLabel").value = b.dataset.xq;
+  $("xStart").value = t?.start || "";
+  $("xEnd").value = t?.end || "";
+  renderExtraSeg();
+});
+$("xLabel").addEventListener("input", () => renderExtraSeg());
 function updateColorField() {
   const label = $("dLabel").value.trim();
   $("dColorField").hidden = !label || !!FIXED_COLORS[label]; // 固定の色のシフトは色を選ばせない
@@ -330,6 +397,8 @@ function renderTypeSeg() {
   $("dType").innerHTML = TYPES.map((t) =>
     `<button type="button" role="radio" data-type="${t.id}" aria-checked="${t.id === editing.type}" class="t-${t.id}">${t.label}</button>`).join("");
   $("dWorkFields").hidden = editing.type === "off" || editing.type === "none";
+  $("dExtraAdd").hidden = !!editing.extra || editing.type === "none";
+  if (editing.type === "none") { editing.extra = null; $("dExtraBox").hidden = true; }
   renderQuick();
 }
 $("dWho").addEventListener("click", (ev) => {
@@ -356,7 +425,10 @@ $("dayDialog").addEventListener("close", () => {
     start: isOff ? "" : $("dStart").value,
     end: isOff ? "" : $("dEnd").value,
     note: editing.type === "none" ? "" : $("dNote").value.trim(),
+    extra: readExtra(),
   });
+  const xe = readExtra();
+  if (xe?.label) ensureType(editing.who, xe.label, xe.start, xe.end, xe.type);
   const label = $("dLabel").value.trim();
   if (!isOff && editing.type !== "none" && label && $("dColor").value.toLowerCase() !== pillColor(label).toLowerCase()) {
     state.labelColors[label] = $("dColor").value.toLowerCase();
@@ -547,7 +619,7 @@ $("ocrResult").addEventListener("click", (ev) => {
   if (ev.target.id !== "applyOcr") return;
   const picked = ocr.entries.filter((e) => e.on);
   for (const e of picked) {
-    setShift(ocr.who, e.date, { ...e, note: "" });
+    setShift(ocr.who, e.date, { ...e, note: "", extra: state.shifts[ocr.who][e.date]?.extra });
     // 元のアプリの色を引き継ぐ。ただし一度決まったシフト名の色は変えない（同じ名前は同じ色に固定）
     if (e.label && e.type !== "off" && e.color && !isHex(state.labelColors[e.label]) && !PRESET_COLORS[e.label] && !FIXED_COLORS[e.label]) state.labelColors[e.label] = e.color;
     if (e.type === "work" || e.type === "plan") ensureType(ocr.who, e.label, e.start, e.end, e.type);
@@ -637,7 +709,12 @@ $("typeDialog").addEventListener("close", () => {
   const prev = old ? state.types[who][old] : null;
   const start = $("tStart").value, end = $("tEnd").value;
   // この種類が入っている日をまとめて直す（名前を変えたとき、時間を変えたとき）
-  for (const [date, e] of Object.entries(state.shifts[who])) {
+  for (let [date, e] of Object.entries(state.shifts[who])) {
+    if (old && e.extra && e.extra.label === old) {
+      const same = !prev || (e.extra.start === prev.start && e.extra.end === prev.end) || (!e.extra.start && !e.extra.end);
+      state.shifts[who][date] = { ...e, extra: { ...e.extra, type: $("tKind").value, label: name, start: same ? start : e.extra.start, end: same ? end : e.extra.end }, u: now };
+      e = state.shifts[who][date];
+    }
     if (!old || e.type !== typeKind(prev) || e.label !== old) continue;
     const sameTime = !prev || (e.start === prev.start && e.end === prev.end) || (!e.start && !e.end);
     state.shifts[who][date] = { ...e, type: $("tKind").value, label: name, start: sameTime ? start : e.start, end: sameTime ? end : e.end, u: now };
@@ -753,6 +830,7 @@ function applyRemote(data) {
         state.shifts[p][date] = {
           type: TYPES.some((t) => t.id === e.type) ? e.type : "none",
           label: String(e.label || ""), start: String(e.start || ""), end: String(e.end || ""), note: String(e.note || ""), u: e.u || 0,
+          ...(cleanExtra(e.extra) ? { extra: cleanExtra(e.extra) } : {}),
         };
       }
     }
