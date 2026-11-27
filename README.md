@@ -118,3 +118,4 @@ curl -X POST https://<サーバー>/api/odometer \
 - ‹ › で日にちを移動。「これまでの記録」で日ごとの達成状況（飲み忘れは赤）を見られる
 - 「設定」で飲み始めた日と、1日目をどの時間帯から始めるかを変えられる
 - 記録はその端末のブラウザ（localStorage）にだけ保存。薬の内容は `kusuri/app.js` の `MEDS`
+- 開いたときに `version.txt` を見て、古いページなら自動で読み込み直す（バージョンを上げるときは `app.js` の `APP_VERSION`・`index.html` の `?v=`・`version.txt` を揃える）。バージョンは「設定」に表示
