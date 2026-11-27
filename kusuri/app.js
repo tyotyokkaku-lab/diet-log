@@ -227,15 +227,60 @@
   };
 
   const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  // 点鼻薬は、ほかの点鼻薬を使ってから30分あける
+  const GAP_MIN = 30;
+  let lockTimer = null;
+  const noseUses = () => {
+    // 今日と昨日の点鼻薬の使用 [{no, at(Date)}]
+    const t = todayKey(), out = [];
+    for (const day of [addDays(t, -1), t]) {
+      const rec = state.log[day] || {};
+      for (const m of MEDS) {
+        const v = rec[`${m.no}n`];
+        if (!Array.isArray(v)) continue;
+        for (const hm of v) {
+          const [h, mi] = hm.split(':').map(Number);
+          const d = parse(day); d.setHours(h, mi, 0, 0);
+          out.push({ no: m.no, name: m.name, at: d });
+        }
+      }
+    }
+    return out;
+  };
+  // その薬が使えるようになる時刻（今すぐ使えるなら null）
+  const lockOf = (no) => {
+    if (cur !== todayKey()) return null;
+    const now = new Date();
+    let last = null;
+    for (const u of noseUses()) {
+      if (u.no === no || u.at > now) continue;
+      if (!last || u.at > last.at) last = u;
+    }
+    if (!last) return null;
+    const until = new Date(last.at.getTime() + GAP_MIN * 60000);
+    return until > now ? { until, by: last } : null;
+  };
+
   const renderNose = (list) => {
     const sec = document.createElement('section');
     sec.className = 'slot';
-    sec.innerHTML = '<div class="slot-head"><h2>点鼻薬<small>使ったら＋（時刻はタップで変更）</small></h2></div><div class="cards"></div>';
+    clearTimeout(lockTimer);
+    const locks = list.map((it) => lockOf(it.med.no));
+    const anyLock = locks.find(Boolean);
+    let banner = '';
+    if (anyLock) {
+      const left = Math.ceil((anyLock.until - new Date()) / 60000);
+      const u = anyLock.until;
+      banner = `<p class="lock-note">⏱ ${anyLock.by.no} ${esc(anyLock.by.name)}を使ったので、ほかの点鼻薬は <b>${pad(u.getHours())}:${pad(u.getMinutes())}</b> から（あと${left}分）</p>`;
+      lockTimer = setTimeout(render, Math.min(30000, u - new Date() + 500));
+    }
+    sec.innerHTML = `<div class="slot-head"><h2>点鼻薬<small>使ったら＋（時刻はタップで変更）</small></h2></div>${banner}<div class="cards"></div>`;
     const cards = sec.querySelector('.cards');
     for (const it of list) {
       const m = it.med;
       const n = it.times.length;
       const reached = n >= m.perDay;
+      const lock = it.skipped ? null : locks[list.indexOf(it)];
       const el = document.createElement('div');
       el.className = `card nose${it.skipped ? ' skipped' : reached ? ' done' : ''}`;
       el.innerHTML = `
@@ -245,11 +290,12 @@
           <div class="sub">${esc(m.amount)}・${it.skipped ? '<span class="time skip">今日はなし</span>' : `<span class="${reached ? 'time' : ''}">今日 ${n}/${m.perDay}回</span>`}</div>
         </button>
         ${it.skipped || n ? '' : `<button type="button" class="skip-btn" aria-label="${esc(m.name)}は今日はなし">なし</button>`}
-        <button type="button" class="chk add" aria-label="${esc(m.name)}を${it.skipped ? '「なし」から戻す' : '使った（今の時刻）'}">${it.skipped ? SKIPMARK : PLUS}</button>
+        <button type="button" class="chk add${lock ? ' locked' : ''}"${lock ? ' disabled' : ''} aria-label="${esc(m.name)}を${it.skipped ? '「なし」から戻す' : '使った（今の時刻）'}">${it.skipped ? SKIPMARK : lock ? `<span class="wait">あと<br>${Math.ceil((lock.until - new Date()) / 60000)}分</span>` : PLUS}</button>
         ${n ? `<div class="times">${it.times.map((t, i) => `<span class="tchip"><input type="time" value="${esc(t)}" data-i="${i}" aria-label="${i + 1}回目の時刻"><button type="button" data-del="${i}" aria-label="${i + 1}回目を消す">×</button></span>`).join('')}</div>` : ''}`;
       el.querySelector('.what').onclick = () => openInfo(m);
       el.querySelector('.skip-btn')?.addEventListener('click', () => setSkip(it.key));
       el.querySelector('.chk').onclick = () => {
+        if (lockOf(m.no) && !it.skipped) { render(); return; }
         const rec = (state.log[cur] ||= {});
         if (it.skipped) delete rec[it.key];
         else rec[it.key] = [...it.times, nowTime()].sort();
