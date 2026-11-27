@@ -134,3 +134,17 @@ dialog ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 14px; line-height: 
 .dlg-actions button { border-radius: 10px; padding: 10px 16px; font-size: 15px; border: 1px solid var(--line); background: none; }
 .dlg-actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .dlg-actions [hidden] { display: none; }
+
+.chk.add { color: var(--nose); border-color: var(--nose); }
+.chk.add svg { opacity: 1; transform: none; }
+.card.done .chk.add { color: #fff; background: var(--nose); border-color: var(--nose); }
+.card.skipped .chk.add { color: var(--muted); border-color: var(--muted); background: none; }
+.times { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: -2px; }
+.tchip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 2px 2px 2px 10px; background: var(--bg); }
+.tchip input {
+  font: inherit; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+  border: none; background: none; color: var(--fg); padding: 4px 0; min-width: 4.2em;
+  -webkit-appearance: none; appearance: none;
+}
+.tchip button { border: none; background: none; color: var(--muted); font-size: 18px; width: 30px; height: 30px; line-height: 1; }
+.tchip input::-webkit-calendar-picker-indicator { display: none; }

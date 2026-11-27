@@ -26,17 +26,17 @@
       work: '胃の粘膜を保護し、組織を修復する薬です。',
       notes: ['発熱、のどの痛み、青あざができる、出血がとまりにくい等の症状が現れた時は、すぐにお知らせください。'] },
     { no: 6, name: 'プリビナ液0.05%', generic: 'ナファゾリン硝酸塩外用液', look: '無色透明の点鼻液（50ml）',
-      kind: 'nose', amount: '1〜2滴', slots: ['m', 'e'], doses: null, period: '1日2回',
+      kind: 'nose', amount: '1〜2滴', slots: [], perDay: 2, doses: null, period: '1日2回',
       work: '鼻づまりを改善する薬です。',
       notes: ['急性充血期にのみ使用するか、又は適切な間隔をあけて使用してください。', '使用部位に刺激感等が起こることがあるので、気になる時は相談してください。', '1日2回（1〜2滴）'] },
     { no: 7, name: 'サンベタゾン眼耳鼻科用液0.1%', generic: 'ベタメタゾンリン酸エステルNa点眼点耳点鼻液', look: '無色〜微黄澄明の液（10ml）',
-      kind: 'nose', amount: '点鼻', slots: ['m', 'e'], doses: null, period: '1日2回',
+      kind: 'nose', amount: '点鼻', slots: [], perDay: 2, doses: null, period: '1日2回',
       work: '目の炎症を抑える薬です。鼻、耳の炎症やアレルギーを抑える薬です。',
       notes: ['まぶしい、涙が出る、目の異物感等の症状が現れた時は、すぐにお知らせください。', '光を避けて保存してください。', '1日2回'] },
     { no: 8, name: 'フルチカゾン点鼻液50μg', generic: 'フルチカゾンプロピオン酸エステル点鼻液', look: '白の点鼻剤（56噴霧用・2瓶）',
-      kind: 'nose', amount: '噴霧', slots: ['m', 'e'], doses: null, period: '医師の指示どおり',
+      kind: 'nose', amount: '噴霧', slots: [], perDay: 2, doses: null, period: '医師の指示どおり',
       work: '鼻炎の症状を和らげる薬です。',
-      notes: ['よく振ってから使用してください。', '呼吸困難、全身が赤くなる、顔・舌・のど等のはれ、じんま疹等の症状が現れた時は、すぐにお知らせください。', '※薬の説明書に回数の記載がないため、このアプリでは朝・夕にしています。指示が違う場合はそれに合わせてください。'] },
+      notes: ['よく振ってから使用してください。', '呼吸困難、全身が赤くなる、顔・舌・のど等のはれ、じんま疹等の症状が現れた時は、すぐにお知らせください。', '※薬の説明書に回数の記載がないため、このアプリでは1日2回を目安にしています。指示が違う場合はそれに合わせてください。'] },
   ];
   const SLOTS = [
     { id: 'm', label: '朝', sub: '朝食後' },
@@ -54,6 +54,17 @@
   state.firstSlot ||= 'e'; // 1日目はどの時間帯から（受け取った日は夕食後から）
   state.log ||= {};      // { '2026-11-27': { '1m': '08:12', ... } }
   state.stopped ||= {};  // { 6: '2026-12-03' } もう使わない点鼻薬（その日から非表示）
+  // 点鼻薬は時間帯ではなく、使った時刻のリスト rec['6n'] = ['08:10', '21:30']（または 'skip'）
+  // 前の版の rec['6m'] / rec['6e'] を移す
+  for (const rec of Object.values(state.log)) {
+    for (const no of [6, 7, 8]) {
+      const old = ['m', 'e', 'b'].map((x) => rec[`${no}${x}`]).filter(Boolean);
+      for (const x of ['m', 'e', 'b']) delete rec[`${no}${x}`];
+      if (!old.length || rec[`${no}n`]) continue;
+      const times = old.filter((v) => v !== 'skip').sort();
+      rec[`${no}n`] = times.length ? times : 'skip';
+    }
+  }
   const slotIdx = (id) => SLOTS.findIndex((x) => x.id === id);
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 
@@ -112,6 +123,33 @@
     return items;
   };
 
+  // その日の点鼻薬
+  const noseFor = (day) => {
+    if (day < state.start) return [];
+    const rec = state.log[day] || {};
+    const out = [];
+    for (const m of MEDS) {
+      if (m.kind !== 'nose') continue;
+      const v = rec[`${m.no}n`];
+      const stopped = state.stopped[m.no];
+      if (!v && stopped && day >= stopped) continue;
+      out.push({ med: m, key: `${m.no}n`, skipped: v === SKIP, times: Array.isArray(v) ? v : [] });
+    }
+    return out;
+  };
+  // 進み具合：飲み薬は1回ずつ、点鼻薬は1日の目安の回数ぶん
+  const dayStats = (day) => {
+    const pills = itemsFor(day), nose = noseFor(day);
+    let total = pills.length, done = pills.filter((i) => i.checked).length;
+    let skip = pills.filter((i) => i.skipped).length;
+    for (const n of nose) {
+      total += n.med.perDay;
+      done += n.skipped ? n.med.perDay : Math.min(n.times.length, n.med.perDay);
+      if (n.skipped) skip++;
+    }
+    return { pills, nose, total, done, skip };
+  };
+
   // ---------- 表示 ----------
   const SKIPMARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12"/></svg>';
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -125,18 +163,18 @@
     $('today').hidden = cur === today;
     $('prev').disabled = cur <= state.start;
 
-    const items = itemsFor(cur);
-    const done = items.filter((i) => i.checked).length;
-    $('bar').style.width = items.length ? `${(done / items.length) * 100}%` : '0';
+    const st = dayStats(cur);
+    const items = st.pills;
+    const { total, done } = st;
+    $('bar').style.width = total ? `${(done / total) * 100}%` : '0';
     const sum = $('summary');
-    sum.classList.toggle('all', items.length > 0 && done === items.length);
-    const nSkip = items.filter((i) => i.skipped).length;
-    const skipNote = nSkip ? `・なし ${nSkip}` : '';
-    sum.textContent = !items.length ? '' : done === items.length ? `ぜんぶできました（${done}/${items.length}${skipNote}）` : `${done} / ${items.length} できた${skipNote}`;
+    sum.classList.toggle('all', total > 0 && done === total);
+    const skipNote = st.skip ? `・なし ${st.skip}` : '';
+    sum.textContent = !total ? '' : done === total ? `ぜんぶできました（${done}/${total}${skipNote}）` : `${done} / ${total} できた${skipNote}`;
 
     const box = $('slots');
     box.innerHTML = '';
-    if (!items.length) {
+    if (!total) {
       box.innerHTML = '<p class="empty">この日の薬はありません</p>';
     }
     for (const s of SLOTS) {
@@ -146,7 +184,7 @@
       const sec = document.createElement('section');
       sec.className = 'slot';
       const allDone = list.every((i) => i.checked);
-      sec.innerHTML = `<div class="slot-head"><h2>${s.label}<small>${s.sub}</small></h2>${allDone ? '' : `<button type="button" class="all-btn">${pills.length && pills.length < list.length && pills.some((i) => !i.checked) ? '飲み薬をまとめて ✓' : 'まとめて ✓'}</button>`}</div><div class="cards"></div>`;
+      sec.innerHTML = `<div class="slot-head"><h2>${s.label}<small>${s.sub}</small></h2>${allDone ? '' : '<button type="button" class="all-btn">まとめて ✓</button>'}</div><div class="cards"></div>`;
       const cards = sec.querySelector('.cards');
       for (const it of list) {
         const m = it.med;
@@ -157,7 +195,7 @@
           <span class="no">${m.no}</span>
           <button type="button" class="what">
             <div class="name">${esc(m.name)}</div>
-            <div class="sub">${m.kind === 'nose' ? '鼻にさす・' : ''}${esc(m.amount)}・${esc(left)}${it.skipped ? '　<span class="time skip">今日はなし</span>' : it.checked ? `　<span class="time">✓ ${esc(it.time)}</span>` : ''}</div>
+            <div class="sub">${esc(m.amount)}・${esc(left)}${it.skipped ? '　<span class="time skip">今日はなし</span>' : it.checked ? `　<span class="time">✓ ${esc(it.time)}</span>` : ''}</div>
           </button>
           ${it.checked ? '' : `<button type="button" class="skip-btn" aria-label="${esc(m.name)}は今日はなし">なし</button>`}
           <button type="button" class="chk" aria-label="${esc(m.name)}を${it.checked ? '未チェックに戻す' : 'チェック'}">${it.skipped ? SKIPMARK : CHECK}</button>`;
@@ -168,7 +206,7 @@
       }
       const all = sec.querySelector('.all-btn');
       if (all) all.onclick = () => {
-        const target = pills.some((i) => !i.checked) && pills.length < list.length ? pills : list;
+        const target = list;
         const rec = (state.log[cur] ||= {});
         const t = nowTime();
         for (const i of target) if (!rec[i.key]) rec[i.key] = t;
@@ -176,6 +214,7 @@
       };
       box.appendChild(sec);
     }
+    if (st.nose.length) box.appendChild(renderNose(st.nose));
     renderHistory();
   };
 
@@ -185,6 +224,58 @@
     else rec[k] = nowTime();
     if (!Object.keys(rec).length) delete state.log[cur];
     save(); render();
+  };
+
+  const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  const renderNose = (list) => {
+    const sec = document.createElement('section');
+    sec.className = 'slot';
+    sec.innerHTML = '<div class="slot-head"><h2>点鼻薬<small>使ったら＋（時刻はタップで変更）</small></h2></div><div class="cards"></div>';
+    const cards = sec.querySelector('.cards');
+    for (const it of list) {
+      const m = it.med;
+      const n = it.times.length;
+      const reached = n >= m.perDay;
+      const el = document.createElement('div');
+      el.className = `card nose${it.skipped ? ' skipped' : reached ? ' done' : ''}`;
+      el.innerHTML = `
+        <span class="no">${m.no}</span>
+        <button type="button" class="what">
+          <div class="name">${esc(m.name)}</div>
+          <div class="sub">${esc(m.amount)}・${it.skipped ? '<span class="time skip">今日はなし</span>' : `<span class="${reached ? 'time' : ''}">今日 ${n}/${m.perDay}回</span>`}</div>
+        </button>
+        ${it.skipped || n ? '' : `<button type="button" class="skip-btn" aria-label="${esc(m.name)}は今日はなし">なし</button>`}
+        <button type="button" class="chk add" aria-label="${esc(m.name)}を${it.skipped ? '「なし」から戻す' : '使った（今の時刻）'}">${it.skipped ? SKIPMARK : PLUS}</button>
+        ${n ? `<div class="times">${it.times.map((t, i) => `<span class="tchip"><input type="time" value="${esc(t)}" data-i="${i}" aria-label="${i + 1}回目の時刻"><button type="button" data-del="${i}" aria-label="${i + 1}回目を消す">×</button></span>`).join('')}</div>` : ''}`;
+      el.querySelector('.what').onclick = () => openInfo(m);
+      el.querySelector('.skip-btn')?.addEventListener('click', () => setSkip(it.key));
+      el.querySelector('.chk').onclick = () => {
+        const rec = (state.log[cur] ||= {});
+        if (it.skipped) delete rec[it.key];
+        else rec[it.key] = [...it.times, nowTime()].sort();
+        save(); render();
+      };
+      el.querySelectorAll('.tchip input').forEach((inp) => {
+        inp.onchange = () => {
+          if (!inp.value) return;
+          const times = [...it.times];
+          times[+inp.dataset.i] = inp.value;
+          state.log[cur][it.key] = times.sort();
+          save(); render();
+        };
+      });
+      el.querySelectorAll('[data-del]').forEach((b) => {
+        b.onclick = () => {
+          const rec = state.log[cur];
+          const times = it.times.filter((_, i) => i !== +b.dataset.del);
+          if (times.length) rec[it.key] = times; else delete rec[it.key];
+          if (!Object.keys(rec).length) delete state.log[cur];
+          save(); render();
+        };
+      });
+      cards.appendChild(el);
+    }
+    return sec;
   };
 
   const setSkip = (k) => {
@@ -198,10 +289,10 @@
     const today = todayKey();
     const last = today < state.start ? state.start : today;
     for (let d = last; d >= state.start; d = addDays(d, -1)) {
-      const items = itemsFor(d);
-      if (!items.length && d !== today) continue;
-      const done = items.filter((i) => i.checked).length;
-      const pct = items.length ? (done / items.length) * 100 : 0;
+      const { total, done } = dayStats(d);
+      const items = { length: total };
+      if (!total && d !== today) continue;
+      const pct = total ? (done / total) * 100 : 0;
       const li = document.createElement('li');
       if (d === cur) li.className = 'cur';
       const past = d < today;
@@ -221,7 +312,7 @@
       <h3>${m.no}. ${esc(m.name)}</h3>
       <p class="generic">${esc(m.generic)}</p>
       <dl>
-        <dt>飲み方・使い方</dt><dd>${esc(when)}に ${esc(m.amount)}（${esc(m.period)}）</dd>
+        <dt>飲み方・使い方</dt><dd>${m.kind === 'nose' ? `鼻にさす薬・1日${m.perDay}回くらい・${esc(m.amount)}（${esc(m.period)}）` : `${esc(when)}に ${esc(m.amount)}（${esc(m.period)}）`}</dd>
         <dt>見た目</dt><dd>${esc(m.look)}</dd>
         <dt>はたらき</dt><dd>${esc(m.work)}</dd>
         <dt>注意すること</dt><dd><ul>${m.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></dd>
