@@ -72,12 +72,16 @@
   let cur = todayKey();
   if (cur < state.start) cur = state.start;
 
+  // rec[k] は飲んだ時刻、または 'skip'（今日はなしでOK）
+  const SKIP = 'skip';
+  const taken = (v) => !!v && v !== SKIP;
+
   // ---------- 何回飲んだか ----------
   const countTaken = (no, beforeKey) => {
     let n = 0;
     for (const [day, rec] of Object.entries(state.log)) {
       if (beforeKey && day >= beforeKey) continue;
-      for (const s of SLOTS) if (rec[`${no}${s.id}`]) n++;
+      for (const s of SLOTS) if (taken(rec[`${no}${s.id}`])) n++;
     }
     return n;
   };
@@ -91,23 +95,25 @@
       for (const s of m.slots) {
         const k = `${m.no}${s}`;
         const checked = !!rec[k];
+        const skipped = rec[k] === SKIP;
         if (!checked) {
           if (stopped && day >= stopped) continue;
           // 1日目は「どこから」より前の時間帯を出さない
           if (day === state.start && slotIdx(s) < slotIdx(state.firstSlot)) continue;
           if (m.doses != null) {
             // その日より前＋その日のこれより前の時間帯で飲んだ回数が合計に達していたら、もう出さない
-            const earlier = m.slots.filter((x) => slotIdx(x) < slotIdx(s) && rec[`${m.no}${x}`]).length;
+            const earlier = m.slots.filter((x) => slotIdx(x) < slotIdx(s) && taken(rec[`${m.no}${x}`])).length;
             if (countTaken(m.no, day) + earlier >= m.doses) continue;
           }
         }
-        items.push({ med: m, slot: s, key: k, checked, time: rec[k] });
+        items.push({ med: m, slot: s, key: k, checked, skipped, time: rec[k] });
       }
     }
     return items;
   };
 
   // ---------- 表示 ----------
+  const SKIPMARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12"/></svg>';
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -124,7 +130,9 @@
     $('bar').style.width = items.length ? `${(done / items.length) * 100}%` : '0';
     const sum = $('summary');
     sum.classList.toggle('all', items.length > 0 && done === items.length);
-    sum.textContent = !items.length ? '' : done === items.length ? `ぜんぶできました（${done}/${items.length}）` : `${done} / ${items.length} できた`;
+    const nSkip = items.filter((i) => i.skipped).length;
+    const skipNote = nSkip ? `・なし ${nSkip}` : '';
+    sum.textContent = !items.length ? '' : done === items.length ? `ぜんぶできました（${done}/${items.length}${skipNote}）` : `${done} / ${items.length} できた${skipNote}`;
 
     const box = $('slots');
     box.innerHTML = '';
@@ -144,15 +152,17 @@
         const m = it.med;
         const left = m.doses != null ? `あと${Math.max(0, m.doses - countTaken(m.no))}回` : m.period;
         const el = document.createElement('div');
-        el.className = `card ${m.kind}${it.checked ? ' done' : ''}`;
+        el.className = `card ${m.kind}${it.skipped ? ' skipped' : it.checked ? ' done' : ''}`;
         el.innerHTML = `
           <span class="no">${m.no}</span>
           <button type="button" class="what">
             <div class="name">${esc(m.name)}</div>
-            <div class="sub">${m.kind === 'nose' ? '鼻にさす・' : ''}${esc(m.amount)}・${esc(left)}${it.checked ? `　<span class="time">✓ ${esc(it.time)}</span>` : ''}</div>
+            <div class="sub">${m.kind === 'nose' ? '鼻にさす・' : ''}${esc(m.amount)}・${esc(left)}${it.skipped ? '　<span class="time skip">今日はなし</span>' : it.checked ? `　<span class="time">✓ ${esc(it.time)}</span>` : ''}</div>
           </button>
-          <button type="button" class="chk" aria-label="${esc(m.name)}を${it.checked ? '未チェックに戻す' : 'チェック'}">${CHECK}</button>`;
+          ${it.checked ? '' : `<button type="button" class="skip-btn" aria-label="${esc(m.name)}は今日はなし">なし</button>`}
+          <button type="button" class="chk" aria-label="${esc(m.name)}を${it.checked ? '未チェックに戻す' : 'チェック'}">${it.skipped ? SKIPMARK : CHECK}</button>`;
         el.querySelector('.chk').onclick = () => toggle(it.key);
+        el.querySelector(".skip-btn")?.addEventListener('click', () => setSkip(it.key));
         el.querySelector('.what').onclick = () => openInfo(m);
         cards.appendChild(el);
       }
@@ -174,6 +184,11 @@
     if (rec[k]) delete rec[k];
     else rec[k] = nowTime();
     if (!Object.keys(rec).length) delete state.log[cur];
+    save(); render();
+  };
+
+  const setSkip = (k) => {
+    (state.log[cur] ||= {})[k] = SKIP;
     save(); render();
   };
 
