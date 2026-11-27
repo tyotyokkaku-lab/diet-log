@@ -66,7 +66,17 @@
     }
   }
   const slotIdx = (id) => SLOTS.findIndex((x) => x.id === id);
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+  // 「1つ前に戻す」用に、変更前の状態を覚えておく（最大30回。アプリを閉じるまで）
+  const undoStack = [];
+  let lastSaved = JSON.stringify(state);
+  const save = () => {
+    const now = JSON.stringify(state);
+    if (now === lastSaved) return;
+    undoStack.push(lastSaved);
+    if (undoStack.length > 30) undoStack.shift();
+    lastSaved = now;
+    try { localStorage.setItem(KEY, now); } catch {}
+  };
 
   // ---------- 日付 ----------
   const pad = (n) => String(n).padStart(2, '0');
@@ -155,7 +165,7 @@
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const render = () => {
+  let render = () => {
     const today = todayKey();
     $('dateLabel').textContent = label(cur);
     const n = diffDays(state.start, cur) + 1;
@@ -404,6 +414,28 @@
     if (t !== lastToday) { if (cur === lastToday) cur = t; lastToday = t; }
     render();
   });
+
+  // ---------- 1つ前に戻す ----------
+  const undoBtn = $('undo');
+  const updateUndo = () => { undoBtn.hidden = !undoStack.length; };
+  undoBtn.onclick = () => {
+    const prev = undoStack.pop();
+    if (!prev) return;
+    const before = state;
+    state = JSON.parse(prev);
+    lastSaved = prev;
+    try { localStorage.setItem(KEY, prev); } catch {}
+    // 変わった日を表示する
+    const days = new Set([...Object.keys(before.log), ...Object.keys(state.log)]);
+    const changed = [...days].filter((d) => JSON.stringify(before.log[d]) !== JSON.stringify(state.log[d]));
+    if (changed.length === 1 && changed[0] !== cur && changed[0] >= state.start) cur = changed[0];
+    if (cur < state.start) cur = state.start;
+    start.value = state.start;
+    first.value = state.firstSlot;
+    render();
+  };
+  const render0 = render;
+  render = () => { render0(); updateUndo(); };
 
   render();
 })();
