@@ -1,6 +1,6 @@
 // おくすりチェック：処方された薬を「朝・夕・寝る前」ごとにチェックしていく
 (() => {
-  const APP_VERSION = '2026-11-27e';
+  const APP_VERSION = '2026-11-27f';
   const $ = (id) => document.getElementById(id);
 
   // ---------- 薬（お薬手帳の No.1〜8） ----------
@@ -11,7 +11,7 @@
       work: '炎症やアレルギーを抑える薬です。かゆみを抑える薬です。',
       notes: ['服用期間中、飲酒は避けてください。', '自己判断で用量の変更や服用の中止をせず、指示通りに服用してください。', '眠気等が起こることがあるので、車の運転等危険を伴う機械の操作は避けてください。', '予防接種の予定がある場合、お知らせください。', '発熱、のどの痛み、体がだるい、咳、痰等の症状が現れた時は、すぐにお知らせください。', '水痘や麻疹への感染が疑われる場合や感染した場合は、すぐに受診してください。', '光を避けて保存してください。'] },
     { no: 2, name: 'メキタジン錠3mg', generic: 'メキタジン錠', look: '白の錠剤（SW 150）',
-      kind: 'pill', amount: '1錠', slots: ['m', 'e'], doses: 30, period: '15日分',
+      kind: 'pill', amount: '1錠', slots: ['m', 'e'], doses: 30, period: '15日分', after: 1,
       work: 'かゆみを抑える薬です。鼻炎の症状を和らげる薬です。喘息の発作を予防する薬です。',
       notes: ['服用期間中、飲酒は避けてください。', '眠気等が起こることがあるので、車の運転等危険を伴う機械の操作は避けてください。', '体がだるい、食欲不振、吐き気、嘔吐、皮膚のかゆみ、白目や皮膚が黄色くなる等の症状が現れた時は、すぐにお知らせください。', '光を避けて保存してください。'] },
     { no: 3, name: 'オロパタジン塩酸塩錠5mg', generic: 'オロパタジン塩酸塩錠', look: '淡黄赤の錠剤（KRM 147）',
@@ -126,6 +126,12 @@
             // その日より前＋その日のこれより前の時間帯で飲んだ回数が合計に達していたら、もう出さない
             const earlier = m.slots.filter((x) => slotIdx(x) < slotIdx(s) && taken(rec[`${m.no}${x}`])).length;
             if (countTaken(m.no, day) + earlier >= m.doses) continue;
+          }
+          // after の薬を飲み終わるまでは出さない（その次の時間帯から）
+          if (m.after) {
+            const a = MEDS.find((x) => x.no === m.after);
+            const aEarlier = a.slots.filter((x) => slotIdx(x) < slotIdx(s) && taken(rec[`${a.no}${x}`])).length;
+            if (countTaken(a.no, day) + aEarlier < a.doses) continue;
           }
         }
         items.push({ med: m, slot: s, key: k, checked, skipped, time: rec[k] });
@@ -370,6 +376,7 @@
       <p class="generic">${esc(m.generic)}</p>
       <dl>
         <dt>飲み方・使い方</dt><dd>${m.kind === 'nose' ? `鼻にさす薬・1日${m.perDay}回くらい・${esc(m.amount)}（${esc(m.period)}）` : `${esc(when)}に ${esc(m.amount)}（${esc(m.period)}）`}</dd>
+        ${m.after ? `<dt>飲み始め</dt><dd>${m.after} ${esc(MEDS.find((x) => x.no === m.after).name)}を飲み終わってから（終わった次の回から表示されます）</dd>` : ''}
         <dt>見た目</dt><dd>${esc(m.look)}</dd>
         <dt>はたらき</dt><dd>${esc(m.work)}</dd>
         <dt>注意すること</dt><dd><ul>${m.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></dd>
