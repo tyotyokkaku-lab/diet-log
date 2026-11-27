@@ -148,3 +148,9 @@ dialog ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 14px; line-height: 
 }
 .tchip button { border: none; background: none; color: var(--muted); font-size: 18px; width: 30px; height: 30px; line-height: 1; }
 .tchip input::-webkit-calendar-picker-indicator { display: none; }
+
+.chk.add.locked { border-color: var(--line); color: var(--muted); background: var(--bg); cursor: not-allowed; }
+.card.done .chk.add.locked { background: var(--bg); color: var(--muted); border-color: var(--line); }
+.wait { font-size: 11px; line-height: 1.2; font-weight: 700; text-align: center; }
+.lock-note { margin: 0 0 8px; padding: 10px 12px; border-radius: 12px; background: #fff3e6; color: #8a4a0b; font-size: 14px; line-height: 1.5; }
+@media (prefers-color-scheme: dark) { .lock-note { background: #3a2610; color: #ffc98f; } }
