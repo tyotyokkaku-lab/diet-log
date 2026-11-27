@@ -1,5 +1,6 @@
 // おくすりチェック：処方された薬を「朝・夕・寝る前」ごとにチェックしていく
 (() => {
+  const APP_VERSION = '2026-11-27e';
   const $ = (id) => document.getElementById(id);
 
   // ---------- 薬（お薬手帳の No.1〜8） ----------
@@ -438,4 +439,17 @@
   render = () => { render0(); updateUndo(); };
 
   render();
+
+  // 公開中の最新版と違えば、自動で読み込み直す（Safariが古いページを覚えていることがあるため）
+  (async () => {
+    try {
+      const r = await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' });
+      const v = (await r.text()).trim();
+      if (r.ok && v && v !== APP_VERSION && !sessionStorage.getItem('kusuri.reloaded.' + v)) {
+        sessionStorage.setItem('kusuri.reloaded.' + v, '1');
+        location.replace(location.pathname + '?v=' + Date.now());
+      }
+    } catch {}
+  })();
+  document.getElementById('appVersion').textContent = APP_VERSION;
 })();
