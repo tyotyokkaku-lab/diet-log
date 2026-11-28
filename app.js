@@ -11,7 +11,7 @@ const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.id, m.label]));
 const SOURCE_LABEL = { dict: "マイ辞書", ai: "AI推定", photo: "写真推定", manual: "手入力", import: "取込" };
 const MODEL = "claude-opus-5-5";
 const STORE_KEY = "dietlog.v1";
-const APP_VERSION = "2026-11-22d";
+const APP_VERSION = "2026-11-28a";
 
 // ---------- 保存データ ----------
 const defaultState = () => ({
@@ -158,7 +158,7 @@ function renderEntries() {
     const sum = items.reduce((a, e) => a + e.kcal * e.qty, 0);
     return `<div class="card meal-group"><h2>${m.label}<small>${r0(sum)} kcal</small></h2>
       ${items.map((e) => `<button class="entry" data-id="${e.id}">
-        <span class="nm">${esc(e.name)}${e.qty !== 1 ? ` ×${e.qty}` : ""}
+        <span class="nm">${esc(e.name)}${e.qty !== 1 ? ` ×${Math.round(e.qty * 100) / 100}` : ""}
           <small>P ${r1(e.p * e.qty)} / F ${r1(e.f * e.qty)} / C ${r1(e.c * e.qty)}・${SOURCE_LABEL[e.source] || ""}</small></span>
         <span class="kc">${r0(e.kcal * e.qty)} kcal</span></button>`).join("")}</div>`;
   }).join("");
@@ -515,8 +515,39 @@ function openEdit(id) {
   $("eMeal").innerHTML = MEALS.map((m) => `<option value="${m.id}" ${m.id === e.meal ? "selected" : ""}>${m.label}</option>`).join("");
   $("eQty").value = e.qty;
   $("eKcal").value = r0(e.kcal); $("eP").value = r1(e.p); $("eF").value = r1(e.f); $("eC").value = r1(e.c);
+  // 一部を移す：既定は「今日」（今日の記録なら同じ日）、別の日へなら朝
+  $("eMoveBox").open = false;
+  $("eMoveM").value = ""; $("eMoveN").value = "";
+  const t = todayStr();
+  $("eMoveDate").value = t;
+  const destMeal = e.date !== t ? "breakfast" : defaultMeal();
+  $("eMoveMeal").innerHTML = MEALS.map((m) => `<option value="${m.id}" ${m.id === destMeal ? "selected" : ""}>${m.label}</option>`).join("");
+  updateMovePreview();
   $("editDialog").showModal();
 }
+function moveFraction() {
+  const m = num($("eMoveM").value), n = num($("eMoveN").value);
+  if (m <= 0 || n <= 0 || m > n) return null;
+  return m / n;
+}
+function updateMovePreview() {
+  const frac = moveFraction();
+  const qty = num($("eQty").value) || 1, kcal1 = num($("eKcal").value);
+  const total = kcal1 * qty;
+  if (frac == null) {
+    $("eMovePreview").textContent = num($("eMoveM").value) > num($("eMoveN").value) && num($("eMoveN").value) > 0
+      ? "「移す分」が「全体」より大きくなっています" : "移す分と全体を入れると、ここに結果が出ます";
+    return;
+  }
+  const dest = $("eMoveDate").value ? dateLabel($("eMoveDate").value) : "";
+  const meal = MEAL_LABEL[$("eMoveMeal").value] || "";
+  $("eMovePreview").textContent = frac >= 1
+    ? `全部（${r0(total)} kcal）を ${dest} の${meal} に移します`
+    : `${r0(total * frac)} kcal を ${dest} の${meal} に移し、ここには ${r0(total * (1 - frac))} kcal が残ります`;
+}
+["eMoveM", "eMoveN", "eMoveDate", "eMoveMeal", "eQty", "eKcal"].forEach((id) => $(id).addEventListener("input", updateMovePreview));
+$("eMoveMeal").addEventListener("change", updateMovePreview);
+
 $("editDialog").addEventListener("close", () => {
   const action = $("editDialog").returnValue;
   const i = state.entries.findIndex((x) => x.id === editingId);
@@ -531,6 +562,28 @@ $("editDialog").addEventListener("close", () => {
     e.qty = num($("eQty").value) || 1;
     e.kcal = num($("eKcal").value); e.p = num($("eP").value); e.f = num($("eF").value); e.c = num($("eC").value);
     upsertDict(e, e.source === "ai" || e.source === "photo" ? "manual" : e.source, null);
+  } else if (action === "move") {
+    const frac = moveFraction();
+    const destDate = $("eMoveDate").value;
+    if (frac == null || !destDate) { alert("「移す分 / 全体」と移す先の日を正しく入れてください。"); return; }
+    const e = state.entries[i];
+    // 先に編集欄の内容を反映してから移す
+    e.name = $("eName").value.trim() || e.name;
+    e.meal = $("eMeal").value;
+    e.qty = num($("eQty").value) || 1;
+    e.kcal = num($("eKcal").value); e.p = num($("eP").value); e.f = num($("eF").value); e.c = num($("eC").value);
+    const destMeal = $("eMoveMeal").value;
+    if (frac >= 1) {
+      e.date = destDate; e.meal = destMeal;
+    } else {
+      const movedQty = e.qty * frac;
+      e.qty = Math.round((e.qty - movedQty) * 1000) / 1000;
+      state.entries.push({ ...e, id: uid(), date: destDate, meal: destMeal, qty: Math.round(movedQty * 1000) / 1000, createdAt: Date.now() });
+    }
+    save();
+    renderToday();
+    alert(`${dateLabel(destDate)} の${MEAL_LABEL[destMeal]}に移しました`);
+    return;
   } else return;
   save();
   renderToday();

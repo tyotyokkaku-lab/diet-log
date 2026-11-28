@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="食事ログ">
-  <link rel="stylesheet" href="style.css?v=2026-11-22d">
+  <link rel="stylesheet" href="style.css?v=2026-11-28a">
 </head>
 <body>
   <header class="topbar">
@@ -162,6 +162,21 @@
         <label class="field"><span>F</span><input id="eF" type="number" inputmode="decimal" step="any"></label>
         <label class="field"><span>C</span><input id="eC" type="number" inputmode="decimal" step="any"></label>
       </div>
+      <details class="move-box" id="eMoveBox">
+        <summary>一部を別の日・食事に移す</summary>
+        <div class="move-frac">
+          <label class="field"><span>移す分</span><input id="eMoveM" type="number" inputmode="decimal" step="any" min="0"></label>
+          <span class="move-slash">/</span>
+          <label class="field"><span>全体</span><input id="eMoveN" type="number" inputmode="decimal" step="any" min="0"></label>
+        </div>
+        <p class="hint">例：からあげ5個のうち2個なら「2 / 5」。茶碗2杯のうち半分なら「1 / 4」。全部なら「1 / 1」。</p>
+        <div class="row">
+          <label class="field"><span>移す先の日</span><input id="eMoveDate" type="date"></label>
+          <label class="field"><span>食事</span><select id="eMoveMeal"></select></label>
+        </div>
+        <p class="hint move-preview" id="eMovePreview"></p>
+        <button value="move" class="primary move-go" formnovalidate>移す</button>
+      </details>
       <div class="row">
         <button value="delete" class="danger" id="eDelete">削除</button>
         <button value="cancel" formnovalidate>キャンセル</button>
@@ -170,6 +185,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=2026-11-22d"></script>
+  <script type="module" src="app.js?v=2026-11-28a"></script>
 </body>
 </html>

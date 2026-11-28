@@ -285,3 +285,13 @@ input, select, textarea, .paste-box textarea { font-size: 16px; }
 .norec-sub { font-size: 1.6rem; font-weight: 600; line-height: 1.3; }
 .db-bar .db-norec { background: var(--muted); opacity: .5; }
 .norec-badge { background: var(--line); color: var(--muted); }
+
+/* 一部を移す */
+.move-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.move-box summary { cursor: pointer; font-weight: 600; color: var(--accent); min-height: 28px; }
+.move-box[open] summary { margin-bottom: 8px; }
+.move-frac { display: flex; align-items: flex-end; gap: 8px; }
+.move-slash { font-size: 1.4rem; padding-bottom: 18px; color: var(--muted); }
+.move-preview { font-weight: 600; color: var(--text); }
+.move-go { width: 100%; }
+dialog { max-height: 90dvh; overflow-y: auto; }
