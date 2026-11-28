@@ -12,13 +12,40 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="社用車">
-<link rel="stylesheet" href="style.css?v=1.1.1">
+<link rel="stylesheet" href="style.css?v=1.2.0">
 </head>
 <body>
-<header class="topbar"><h1>🚗 社用車メンテナンス</h1></header>
+<header class="topbar"><h1 id="appTitle">🚗 社用車メンテナンス</h1></header>
 <div class="wrap">
 
 <div id="banner" class="banner hide"></div>
+<div class="modes" id="modes"><button data-m="maint" class="on">🔧 メンテナンス</button><button data-m="safe">🛡 安全管理(軽貨物)</button></div>
+
+<div id="modeSafe" class="hide">
+<div id="azSync" class="banner hide"></div>
+<div class="tabs" id="azTabs">
+<button data-t="home" class="on">今日</button>
+<button data-t="rec">記録</button>
+<button data-t="jiko">事故</button>
+<button data-t="daicho">台帳</button>
+<button data-t="out">出力</button>
+</div>
+<section id="az-home"></section>
+<section id="az-rec" class="hide">
+<div class="seg" id="azRecSeg"><button data-k="tenko" class="on">点呼</button><button data-k="tenken">日常点検</button><button data-k="gyomu">業務</button><button data-k="shido">指導監督</button></div>
+<div class="card">
+<div class="mnav"><button id="azPrev" aria-label="前の月">‹</button><b id="azMon"></b><button id="azNext" aria-label="次の月">›</button></div>
+<div class="note" id="azRecNote"></div>
+<button class="btn" id="azAdd">＋ 記録を追加</button>
+<div id="azList"></div>
+</div>
+</section>
+<section id="az-jiko" class="hide"></section>
+<section id="az-daicho" class="hide"></section>
+<section id="az-out" class="hide"></section>
+</div>
+
+<div id="modeMaint">
 <div class="card" id="status"></div>
 
 <div class="card">
@@ -112,6 +139,8 @@
 <button class="btn sec" id="sSave">設定を保存</button>
 </div>
 
+</div><!-- /modeMaint -->
+
 <div class="card">
 <b>バックアップ・引っ越し</b>
 <div class="note">旧アプリの「データをコピー」で出した文字を下に貼り付けるか、書き出したファイルを選んで「取り込む」を押してください。今のデータは取り込んだ内容に置き換わります。</div>
@@ -123,7 +152,7 @@
 <input type="file" id="bkFile" accept="application/json,.json,.txt" class="hide">
 <div class="msg" id="bkMsg"></div>
 <hr>
-<div class="note">すべての記録を書き出します(機種変更・バックアップ用)。</div>
+<div class="note">すべての記録(メンテナンスと安全管理)を書き出します(機種変更・バックアップ用)。</div>
 <div class="two">
 <button class="btn sec" id="exBtn">データをコピー</button>
 <button class="btn sec" id="exFile">ファイルに保存</button>
@@ -149,6 +178,9 @@
 
 <div class="foot" id="foot"></div>
 </div>
-<script src="app.js?v=1.1.1"></script>
+<div id="azSheet" class="sheet hide" role="dialog" aria-modal="true"></div>
+<div id="printArea"></div>
+<script src="app.js?v=1.2.0"></script>
+<script src="anzen.js?v=1.2.0"></script>
 </body>
 </html>

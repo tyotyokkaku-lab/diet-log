@@ -91,6 +91,30 @@ r = await call("OPTIONS", "/api/data", null, { Origin: H.Origin });
 check("プリフライト", r.status === 204 || r.status === 200, r);
 
 
+// ---- 安全管理 ----
+r = await call("GET", "/api/safety");
+check("安全管理:最初は空", r.status === 200 && Array.isArray(r.data.tenko) && r.data.tenko.length === 0 && typeof r.data.profile === "object", r);
+r = await call("PUT", "/api/safety/tenko/t1", { date: "2026-11-28", phase: "乗務前", alcohol: "なし" });
+check("安全管理:1件保存", r.status === 200, r);
+r = await call("PUT", "/api/safety/profile/main", { driver: "山田" });
+check("安全管理:プロフィール保存", r.status === 200, r);
+r = await call("PUT", "/api/safety/bad/t1", { a: 1 });
+check("安全管理:知らない種類は400", r.status === 400, r);
+r = await call("PUT", "/api/safety/tenko/" + encodeURIComponent("a b"), { a: 1 });
+check("安全管理:おかしなIDは400", r.status === 400, r);
+r = await call("GET", "/api/safety");
+check("安全管理:読み出し", r.data.tenko.length === 1 && r.data.tenko[0].id === "t1" && r.data.tenko[0].alcohol === "なし" && r.data.profile.driver === "山田", r.data);
+const many = Array.from({ length: 3000 }, (_, i) => ({ id: "g" + i, startAt: "2026-01-01T08:00", waypoints: "あ".repeat(100) }));
+r = await call("PUT", "/api/safety", { tenko: [{ id: "t2", date: "2026-11-27" }], gyomu: many, profile: { driver: "佐藤" } });
+check("安全管理:全件置き換え 3001件+プロフィール", r.status === 200 && r.data.count === 3002, r);
+r = await call("GET", "/api/safety");
+check("安全管理:置き換え後", r.data.tenko.length === 1 && r.data.tenko[0].id === "t2" && r.data.gyomu.length === 3000 && r.data.profile.driver === "佐藤", { t: r.data.tenko, g: r.data.gyomu.length });
+r = await call("DELETE", "/api/safety/tenko/t2");
+r = await call("GET", "/api/safety");
+check("安全管理:削除", r.data.tenko.length === 0, r.data.tenko);
+r = await call("GET", "/api/safety", null, { Origin: H.Origin });
+check("安全管理:合言葉なしは401", r.status === 401, r);
+
 // ---- Even G2(音声) ----
 async function say(text, token = "test-passcode-123", extra = {}) {
   const r = await mf.dispatchFetch("http://x/", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ model: "x", messages: [{ role: "user", content: text }], ...extra }) });
