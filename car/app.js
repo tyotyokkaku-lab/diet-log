@@ -1,7 +1,7 @@
 // 社用車メンテナンス
 // サーバー未接続:データはこの端末のブラウザ内(IndexedDB)だけに保存
 // サーバー接続中:サーバー(Cloudflare Workers + D1)が正。この端末には表示用の控えを保存
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2, "0");
@@ -48,6 +48,8 @@ async function idbPut(v) {
   });
 }
 function plain() { return { km: S.km, oil: S.oil, tire: S.tire, set: S.set }; }
+// バックアップ用:安全管理(anzen.js)の記録も一緒に書き出す
+const fullBackup = () => ({ ...plain(), ...(window.AZ ? { safety: window.AZ.data() } : {}) });
 async function save() {
   const data = JSON.parse(JSON.stringify(plain()));
   try { await idbPut(data); }
@@ -121,7 +123,10 @@ async function init() {
 }
 // アプリに戻ってきたとき、ほかの端末で記録した分を取り込む
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && online()) pull().catch(() => {});
+  if (document.visibilityState === "visible" && online()) {
+    pull().catch(() => {});
+    if (window.AZ) window.AZ.pull();
+  }
 });
 
 const sortAsc = a => a.slice().sort((x, y) => x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
@@ -281,15 +286,18 @@ $("srvSave").onclick = async () => {
   const localHas = S.km.length + S.oil.length + S.tire.length > 0;
   if (serverEmpty && localHas) {
     showServerState();
+    if (window.AZ) window.AZ.render();
     msg.textContent = "つなぎました。サーバーはまだ空です。下の「この端末のデータをサーバーに送る」を押して、今のデータをサーバーに入れてください。";
     return;
   }
   S = normalize(d); await save(); showServerState(); render();
+  if (window.AZ) await window.AZ.pull();
   msg.textContent = `つなぎました(${summary(S)})。`;
 };
 $("srvOff").onclick = () => {
   SRV = null; try { localStorage.removeItem("carServer"); } catch (e) {}
   showServerState(); setBanner("");
+  if (window.AZ) window.AZ.render();
   $("srvMsg").textContent = "解除しました。これからの記録はこの端末の中だけに保存されます。"; $("srvMsg").classList.remove("err");
 };
 let upArm = false;
@@ -303,20 +311,20 @@ $("srvUpload").onclick = async () => {
   }
   upArm = false; $("srvUpload").textContent = "この端末のデータをサーバーに送る";
   msg.textContent = "送信中…";
-  try { await api("PUT", "/api/data", plain()); await pull(); msg.textContent = `サーバーに送りました(${summary(S)})。`; }
+  try { await api("PUT", "/api/data", plain()); if (window.AZ) await window.AZ.upload(); await pull(); msg.textContent = `サーバーに送りました(${summary(S)})。`; }
   catch (e) { msg.textContent = "送れませんでした:" + e.message; msg.classList.add("err"); }
 };
 
 // ---- 書き出し ----
 const summary = d => `走行${d.km.length}件・オイル${d.oil.length}件・タイヤ${d.tire.length}件`;
 $("exBtn").onclick = async () => {
-  const t = JSON.stringify(plain());
+  const t = JSON.stringify(fullBackup());
   $("exText").value = t; $("exText").classList.remove("hide");
   try { await navigator.clipboard.writeText(t); $("exMsg").textContent = `コピーしました(${summary(S)})。`; }
   catch (e) { $("exText").focus(); $("exText").select(); $("exMsg").textContent = `自動でコピーできませんでした。上の枠の中身をすべて選択してコピーしてください(${summary(S)})。`; }
 };
 $("exFile").onclick = () => {
-  const blob = new Blob([JSON.stringify(plain())], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(fullBackup())], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = "car-backup-" + today() + ".json";
   document.body.appendChild(a); a.click(); a.remove();
@@ -353,6 +361,10 @@ $("bkImport").onclick = async () => {
     catch (e) { msg.textContent = "取り込めませんでした:" + e.message; msg.classList.add("err"); return; }
   }
   S = n; kmAll = false; await save(); render();
+  if (d.safety && window.AZ) {
+    try { await window.AZ.replace(d.safety); }
+    catch (e) { msg.textContent = "安全管理の記録を取り込めませんでした:" + e.message; msg.classList.add("err"); return; }
+  }
   $("bkText").value = "";
   msg.textContent = `取り込みました(${summary(S)})。`;
 };

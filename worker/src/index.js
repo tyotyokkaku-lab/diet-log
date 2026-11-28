@@ -221,6 +221,59 @@ async function readMeter(env, b) {
   return { odometer, confidence, prev };
 }
 
+// ---------- 安全管理(軽貨物の点呼・日常点検・業務記録・事故・指導監督・台帳) ----------
+// 記録は種類(kind)ごとに1行1件で、中身はJSONのまま保存する。profile は1件だけ(id = main)
+const SAFETY_KINDS = ["tenko", "tenken", "gyomu", "jiko", "shido", "kenshin", "tekisei", "tokubetsu", "koshu", "profile"];
+const SAFETY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const SAFETY_MAX_BYTES = 32000;
+let safetyReady = false;
+async function ensureSafety(env) {
+  if (safetyReady) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS safety (kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (kind, id))").run();
+  safetyReady = true;
+}
+function safetyRow(kind, id, rec) {
+  if (!SAFETY_KINDS.includes(kind)) throw new HttpError(400, "記録の種類が正しくありません");
+  if (!SAFETY_ID_RE.test(id || "")) throw new HttpError(400, "記録のIDが正しくありません");
+  if (!rec || typeof rec !== "object" || Array.isArray(rec)) throw new HttpError(400, "記録の中身はオブジェクトで送ってください");
+  const data = JSON.stringify({ ...rec, id });
+  if (data.length > SAFETY_MAX_BYTES) throw new HttpError(413, "記録が大きすぎます");
+  return { kind, id, data, updated: Date.now() };
+}
+async function loadSafety(env) {
+  await ensureSafety(env);
+  const rows = await env.DB.prepare("SELECT kind, data FROM safety ORDER BY kind, id").all();
+  const out = { profile: {} };
+  for (const k of SAFETY_KINDS) if (k !== "profile") out[k] = [];
+  for (const r of rows.results) {
+    let d; try { d = JSON.parse(r.data); } catch (e) { continue; }
+    if (r.kind === "profile") out.profile = d; else if (out[r.kind]) out[r.kind].push(d);
+  }
+  return out;
+}
+// 全件置き換え。D1は1回の呼び出しで使える文の数が少ないので、json_each で1文にまとめて入れる
+async function replaceSafety(env, d) {
+  await ensureSafety(env);
+  if (!d || typeof d !== "object") throw new HttpError(400, "JSONの形式が正しくありません");
+  const rows = [];
+  for (const k of SAFETY_KINDS) {
+    if (k === "profile") { if (d.profile && typeof d.profile === "object" && Object.keys(d.profile).length) rows.push(safetyRow(k, "main", d.profile)); continue; }
+    for (const r of Array.isArray(d[k]) ? d[k] : []) rows.push(safetyRow(k, String(r && r.id || ""), r));
+  }
+  if (rows.length > 50000) throw new HttpError(400, "件数が多すぎます");
+  const stmts = [env.DB.prepare("DELETE FROM safety")];
+  let part = [], size = 0;
+  const flush = () => {
+    if (!part.length) return;
+    stmts.push(env.DB.prepare("INSERT INTO safety (kind, id, data, updated) SELECT json_extract(value, '$.kind'), json_extract(value, '$.id'), json_extract(value, '$.data'), json_extract(value, '$.updated') FROM json_each(?)").bind(JSON.stringify(part)));
+    part = []; size = 0;
+  };
+  for (const r of rows) { part.push(r); size += r.data.length + 100; if (size > 400000) flush(); }
+  flush();
+  await env.DB.batch(stmts);
+  return rows.length;
+}
+
 // ---------- 振り分け ----------
 async function route(req, env) {
   const url = new URL(req.url);
@@ -273,6 +326,22 @@ async function route(req, env) {
   }
 
   if (p === "/api/read-meter" && M === "POST") return readMeter(env, await body(req));
+
+  if (p === "/api/safety" && M === "GET") return loadSafety(env);
+  if (p === "/api/safety" && M === "PUT") return { ok: true, count: await replaceSafety(env, await body(req)) };
+  mt = p.match(/^\/api\/safety\/([a-z]+)\/([^/]+)$/);
+  if (mt && (M === "PUT" || M === "DELETE")) {
+    await ensureSafety(env);
+    const kind = mt[1], id = decodeURIComponent(mt[2]);
+    if (M === "DELETE") {
+      if (!SAFETY_KINDS.includes(kind)) throw new HttpError(400, "記録の種類が正しくありません");
+      await env.DB.prepare("DELETE FROM safety WHERE kind = ? AND id = ?").bind(kind, id).run();
+      return { ok: true };
+    }
+    const row = safetyRow(kind, id, await body(req));
+    await env.DB.prepare("INSERT INTO safety (kind, id, data, updated) VALUES (?, ?, ?, ?) ON CONFLICT(kind, id) DO UPDATE SET data = excluded.data, updated = excluded.updated").bind(row.kind, row.id, row.data, row.updated).run();
+    return { ok: true };
+  }
 
   throw new HttpError(404, "見つかりません");
 }

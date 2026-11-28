@@ -22,3 +22,5 @@ CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS counters (k TEXT PRIMARY KEY, n INTEGER NOT NULL);
 -- Even G2 からの問い合わせの記録(直近50件。合言葉そのものは保存しない)
 CREATE TABLE IF NOT EXISTS agentlog (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, info TEXT NOT NULL);
+-- 安全管理の記録(点呼・日常点検・業務記録・事故など)。中身はJSON。サーバーが初めて使うときにも自動で作る
+CREATE TABLE IF NOT EXISTS safety (kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (kind, id));
